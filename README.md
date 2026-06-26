@@ -5,7 +5,7 @@ Pi-native toolkit providing extensions, skills, themes, prompts, and specialized
 ## Install
 
 ```bash
-pi install @lunitrixx/pi-agent-kit
+pi install npm:@lunitrixx/pi-agent-kit
 ```
 
 ### Extensions (13)
