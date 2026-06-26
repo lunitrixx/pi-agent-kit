@@ -25,7 +25,7 @@ pi install npm:@lunitrixx/pi-agent-kit
 | `lntrx-memory` | Cross-session project memory (cerebrum, anatomy, buglog, scratchpad, daily) |
 | `lntrx-project-rules` | Inject `.pi/rules/` into system prompt + banner widget |
 
-### Skills (14)
+### Skills (15)
 Auto-detected by Pi from your prompt.
 
 | Skill | Triggers on |
@@ -44,6 +44,7 @@ Auto-detected by Pi from your prompt.
 | `docs-gen` | "write documentation" |
 | `dep-update` | "update dependencies" |
 | `extend-pi` | "build an extension" |
+| `initialize-project` | "initialize a project", "scaffold" |
 
 ### Agents
 Subagents via `subagent` tool or `/parallel` command (pi-subagents).
