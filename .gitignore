@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+
+# Secrets & environment
+.env
+.env.local
+.envrc.local
+!.envrc.local-template
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# IDE
+/.idea
+/.vscode/*
+!/.vscode/settings.json
+.pi/memory/
