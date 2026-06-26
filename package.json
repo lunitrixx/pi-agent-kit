@@ -1,0 +1,73 @@
+{
+  "name": "pi-agent-kit",
+  "version": "0.1.0",
+  "description": "Pi-native agent kit: extensions, skills, themes, prompts, and agents for pi-coding-agent",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "extensions/*"
+  ],
+  "keywords": [
+    "pi-package",
+    "ai-agent",
+    "coding-assistant",
+    "skills",
+    "extensions"
+  ],
+  "author": "Lunitrixx",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lunitrixx/pi-agent-kit.git"
+  },
+  "dependencies": {
+    "pi-web-access": "^0.13.0",
+    "pi-mcp-adapter": "^2.10.0",
+    "pi-subagents": "^0.31.0"
+  },
+  "bundledDependencies": [
+    "pi-web-access",
+    "pi-mcp-adapter",
+    "pi-subagents"
+  ],
+  "peerDependencies": {
+    "typebox": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-tui": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "zod": "*"
+  },
+  "pi": {
+    "extensions": [
+      "extensions/lntrx-header",
+      "extensions/lntrx-lang",
+      "extensions/lntrx-grill-me",
+      "extensions/lntrx-config",
+      "extensions/lntrx-footer",
+      "extensions/lntrx-guard",
+      "extensions/lntrx-health",
+      "extensions/lntrx-context",
+      "extensions/lntrx-localmodels",
+      "extensions/lntrx-lsp",
+      "extensions/lntrx-fmt",
+      "extensions/lntrx-memory",
+      "extensions/lntrx-project-rules",
+      "node_modules/pi-web-access",
+      "node_modules/pi-mcp-adapter",
+      "node_modules/pi-subagents"
+    ],
+    "skills": [
+      "skills",
+      "node_modules/pi-web-access/skills"
+    ],
+    "agents": [
+      "agents"
+    ],
+    "prompts": [
+      "prompts"
+    ],
+    "themes": [
+      "themes"
+    ]
+  }
+}
