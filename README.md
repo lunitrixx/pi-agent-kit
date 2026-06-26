@@ -5,31 +5,25 @@ Pi-native toolkit providing extensions, skills, themes, prompts, and specialized
 ## Install
 
 ```bash
-# From GitHub
-pi install git:github.com/lunitrixx/pi-agent-kit
-
-# Or local development
-cd pi-agent-kit
-npm install
-pi install .
+pi install @lunitrixx/pi-agent-kit
 ```
 
-## What's inside
-
-### Extensions (11)
+### Extensions (13)
 | Extension | What |
 |---|---|
 | `lntrx-header` | Rainbow LUNITRIXX banner + system info |
 | `lntrx-lang` | `/lang de\|en` — response language |
-| `lntrx-grill-me` | Socratic planning interview |
-| `lntrx-config` | Auto-provision web-search + shared config |
+| `lntrx-grill-me` | Socratic planning interview with severity levels |
+| `lntrx-config` | Auto-provision web-search + shared config (`~/.pi/agent/`) |
 | `lntrx-footer` | Token/cost/speed footer |
-| `lntrx-guard` | Blocks dangerous commands + secrets |
+| `lntrx-guard` | Dangerous command confirmation, secret scanning, pre-commit hook blocking direct commits to main |
+| `lntrx-health` | `/health` — codebase health: TODOs, large files, stale deps |
 | `lntrx-context` | `/ctx` token usage report |
-| `lntrx-localmodels` | Local LLM endpoint manager |
+| `lntrx-localmodels` | Local LLM endpoint manager (`/localmodel`) |
 | `lntrx-lsp` | LSP diagnostics after write |
 | `lntrx-fmt` | Auto-format on write |
-| `lntrx-memory` | Cross-session agent memory |
+| `lntrx-memory` | Cross-session project memory (cerebrum, anatomy, buglog, scratchpad, daily) |
+| `lntrx-project-rules` | Inject `.pi/rules/` into system prompt + banner widget |
 
 ### Skills (14)
 Auto-detected by Pi from your prompt.
