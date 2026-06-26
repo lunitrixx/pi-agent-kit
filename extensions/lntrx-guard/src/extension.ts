@@ -1,5 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execSync } from "child_process";
+import { existsSync, writeFileSync, chmodSync } from "node:fs";
+import { join } from "node:path";
 import { get, set } from "../../lntrx-config/src/config";
 
 const NS = "lntrx-guard";
@@ -60,7 +62,82 @@ function scanSecrets(text: string): string[] {
   return found;
 }
 
+// ---------------------------------------------------------------------------
+// Git hook — blocks direct commits to main
+// ---------------------------------------------------------------------------
+
+const HOOK_SCRIPT = `#!/bin/sh
+# Installed by lntrx-guard — do not edit manually
+BRANCH=$(git branch --show-current 2>/dev/null)
+if [ "$BRANCH" = "main" ]; then
+  echo ""
+  echo "  lntrx-guard: Direct commits to main are blocked."
+  echo "  Use a feature branch (feat/..., fix/...) and open a PR."
+  echo "  Bypass with: git commit --no-verify"
+  echo ""
+  exit 1
+fi
+`;
+
+function hookInstalled(repoPath: string): boolean {
+  if (!existsSync(join(repoPath, ".git"))) return true; // not a repo, skip
+  try {
+    const hook = execSync("cat .git/hooks/pre-commit", { encoding: "utf-8", cwd: repoPath });
+    return hook.includes("lntrx-guard");
+  } catch {
+    return false;
+  }
+}
+
+function installHook(repoPath: string): boolean {
+  if (!existsSync(join(repoPath, ".git"))) return false;
+  const hookPath = join(repoPath, ".git", "hooks", "pre-commit");
+  writeFileSync(hookPath, HOOK_SCRIPT);
+  chmodSync(hookPath, 0o755);
+  return true;
+}
+
 export default function (pi: ExtensionAPI) {
+  // ---- Session start: auto-install git hook ----
+  pi.on("session_start", async (_event, ctx) => {
+    if (!on()) return;
+    if (!hookInstalled(ctx.cwd)) {
+      const installed = installHook(ctx.cwd);
+      if (installed) {
+        ctx.ui.notify(
+          "lntrx-guard: Installed pre-commit hook — direct commits to main are now blocked.",
+          "success",
+        );
+      }
+    }
+  });
+
+  // ---- /guard-hook command ----
+  pi.registerCommand("guard-hook", {
+    description: "Manage the pre-commit hook: status, install, uninstall",
+    handler: async (args, ctx) => {
+      const sub = args.trim();
+      if (sub === "uninstall" || sub === "remove") {
+        const hookPath = join(ctx.cwd, ".git", "hooks", "pre-commit");
+        if (existsSync(hookPath)) {
+          execSync(`rm -f "${hookPath}"`);
+          ctx.ui.notify("Pre-commit hook removed.", "warning");
+        } else {
+          ctx.ui.notify("No hook to remove.", "info");
+        }
+      } else if (sub === "install") {
+        const ok = installHook(ctx.cwd);
+        ctx.ui.notify(ok ? "Pre-commit hook installed." : "Not a git repo.", ok ? "success" : "error");
+      } else {
+        const status = hookInstalled(ctx.cwd);
+        ctx.ui.notify(
+          status ? "Pre-commit hook active — main branch protected." : "No hook installed. /guard-hook install",
+          status ? "info" : "warning",
+        );
+      }
+    },
+  });
+
   pi.registerCommand("safety", {
     description: "Toggle safety guard. /safety on | off | status",
     handler: async (args, ctx) => {
