@@ -91,7 +91,7 @@ const HOOKS: HookDef[] = [
 ];
 
 function projectConfigPath(repoPath: string): string {
-  return join(repoPath, ".pi", "guard.json");
+  return join(repoPath, ".pi", "pi-agent-kit.json");
 }
 
 function projectConfig(repoPath: string): Record<string, unknown> {
