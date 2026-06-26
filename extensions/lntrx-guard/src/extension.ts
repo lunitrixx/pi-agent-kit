@@ -63,10 +63,10 @@ function scanSecrets(text: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Git hook — blocks direct commits to main
+// Git hooks — block direct commits/pushes to main
 // ---------------------------------------------------------------------------
 
-const HOOK_SCRIPT = `#!/bin/sh
+const PRE_COMMIT_HOOK = `#!/bin/sh
 # Installed by lntrx-guard — do not edit manually
 BRANCH=$(git branch --show-current 2>/dev/null)
 if [ "$BRANCH" = "main" ]; then
@@ -78,6 +78,34 @@ if [ "$BRANCH" = "main" ]; then
   exit 1
 fi
 `;
+
+const PRE_PUSH_HOOK = `#!/bin/sh
+# Installed by lntrx-guard — do not edit manually
+REMOTE="$1"
+URL="$2"
+while read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+  BRANCH=$(echo "$LOCAL_REF" | sed 's|refs/heads/||')
+  if [ "$BRANCH" = "main" ]; then
+    echo ""
+    echo "  lntrx-guard: Direct pushes to main are blocked."
+    echo "  Changes must land via pull request only."
+    echo "  Bypass with: git push --no-verify"
+    echo ""
+    exit 1
+  fi
+done
+`;
+
+interface HookDef {
+  name: string;          // file name in .git/hooks/
+  configKey: string;     // dotted namespace key
+  script: string;
+}
+
+const HOOKS: HookDef[] = [
+  { name: "pre-commit", configKey: "git-hooks.block-main-commit", script: PRE_COMMIT_HOOK },
+  { name: "pre-push",   configKey: "git-hooks.block-main-push",   script: PRE_PUSH_HOOK },
+];
 
 function projectConfigPath(repoPath: string): string {
   return join(repoPath, ".pi", "guard.json");
@@ -96,71 +124,67 @@ function writeProjectConfig(repoPath: string, cfg: Record<string, unknown>): voi
   writeFileSync(projectConfigPath(repoPath), JSON.stringify(cfg, null, 2) + "\n");
 }
 
-function hookGloballyDisabled(): boolean {
-  return get("lntrx-guard.hook") === false;
+function hookGloballyDisabled(key: string): boolean {
+  return get(`lntrx-guard.${key}`) === false;
 }
 
-function hookProjectDisabled(repoPath: string): boolean {
-  return projectConfig(repoPath).hook === false;
+function hookProjectDisabled(repoPath: string, key: string): boolean {
+  return (projectConfig(repoPath) as any)?.[key] === false;
 }
 
-function hookEnabled(repoPath: string): boolean {
-  if (hookGloballyDisabled()) return false;
-  if (hookProjectDisabled(repoPath)) return false;
+function hookEnabled(repoPath: string, hook: HookDef): boolean {
+  if (hookGloballyDisabled(hook.configKey)) return false;
+  if (hookProjectDisabled(repoPath, hook.configKey)) return false;
   return true;
 }
 
-function hookInstalled(repoPath: string): boolean {
+function hookInstalled(repoPath: string, hook: HookDef): boolean {
   if (!existsSync(join(repoPath, ".git"))) return true; // not a repo, skip
   try {
-    const hook = execSync("cat .git/hooks/pre-commit", { encoding: "utf-8", cwd: repoPath });
-    return hook.includes("lntrx-guard");
+    const content = execSync(`cat .git/hooks/${hook.name}`, { encoding: "utf-8", cwd: repoPath });
+    return content.includes("lntrx-guard");
   } catch {
     return false;
   }
 }
 
-function installHook(repoPath: string): boolean {
+function installHook(repoPath: string, hook: HookDef): boolean {
   if (!existsSync(join(repoPath, ".git"))) return false;
-  const hookPath = join(repoPath, ".git", "hooks", "pre-commit");
-  writeFileSync(hookPath, HOOK_SCRIPT);
+  const hookPath = join(repoPath, ".git", "hooks", hook.name);
+  writeFileSync(hookPath, hook.script);
   chmodSync(hookPath, 0o755);
   return true;
 }
 
-function removeHook(repoPath: string): boolean {
-  const hookPath = join(repoPath, ".git", "hooks", "pre-commit");
+function removeHook(repoPath: string, hook: HookDef): boolean {
+  const hookPath = join(repoPath, ".git", "hooks", hook.name);
   if (!existsSync(hookPath)) return false;
   execSync(`rm -f "${hookPath}"`);
   return true;
 }
 
 export default function (pi: ExtensionAPI) {
-  // ---- Session start: auto-install git hook ----
+  // ---- Session start: sync all git hooks ----
   pi.on("session_start", async (_event, ctx) => {
     if (!on()) return;
-    if (!hookEnabled(ctx.cwd)) {
-      // Hook is disabled globally or per-project — remove if present
-      if (hookInstalled(ctx.cwd)) {
-        removeHook(ctx.cwd);
-        ctx.ui.notify("lntrx-guard: Pre-commit hook removed (disabled by config).", "warning");
+    for (const hook of HOOKS) {
+      if (!hookEnabled(ctx.cwd, hook)) {
+        if (hookInstalled(ctx.cwd, hook)) {
+          removeHook(ctx.cwd, hook);
+          ctx.ui.notify(`lntrx-guard: ${hook.name} hook removed (disabled by config).`, "warning");
+        }
+        continue;
       }
-      return;
-    }
-    if (!hookInstalled(ctx.cwd)) {
-      const installed = installHook(ctx.cwd);
-      if (installed) {
-        ctx.ui.notify(
-          "lntrx-guard: Installed pre-commit hook — direct commits to main are now blocked.",
-          "success",
-        );
+      if (!hookInstalled(ctx.cwd, hook)) {
+        installHook(ctx.cwd, hook);
+        ctx.ui.notify(`lntrx-guard: Installed ${hook.name} hook.`, "success");
       }
     }
   });
 
   // ---- /guard-hook command ----
   pi.registerCommand("guard-hook", {
-    description: "Manage the pre-commit hook: status, install, uninstall, disable, enable [--global]",
+    description: "Manage git hooks: status, install, uninstall, disable, enable [--global] [hook-name]",
     getArgumentCompletions: (prefix) => {
       const subs = ["status", "install", "uninstall", "disable", "enable"];
       const match = subs.filter((s) => s.startsWith(prefix));
@@ -170,71 +194,80 @@ export default function (pi: ExtensionAPI) {
       const parts = args.trim().split(/\s+/);
       const sub = parts[0];
       const global = parts.includes("--global") || parts.includes("-g");
+      // Resolve hook name argument (strip known flags)
+      const hookName = parts.filter((p) => !["disable","enable","install","uninstall","remove","status","--global","-g"].includes(p))[0];
+      const targets = hookName ? HOOKS.filter((h) => h.name === hookName) : HOOKS;
 
       if (sub === "disable") {
-        if (global) {
-          set("lntrx-guard.hook", false);
-          ctx.ui.notify("Pre-commit hook disabled globally. /guard-hook enable --global to undo.", "warning");
-        } else {
-          const cfg = projectConfig(ctx.cwd);
-          cfg.hook = false;
-          writeProjectConfig(ctx.cwd, cfg);
-          ctx.ui.notify("Pre-commit hook disabled for this project. /guard-hook enable to undo.", "warning");
+        for (const hook of targets) {
+          if (global) {
+            set(`lntrx-guard.${hook.configKey}`, false);
+          } else {
+            const cfg = projectConfig(ctx.cwd);
+            (cfg as any)[hook.configKey] = false;
+            writeProjectConfig(ctx.cwd, cfg);
+          }
+          if (hookInstalled(ctx.cwd, hook)) removeHook(ctx.cwd, hook);
         }
-        // Remove hook file immediately
-        if (hookInstalled(ctx.cwd)) {
-          removeHook(ctx.cwd);
-          ctx.ui.notify("Existing hook file removed.", "info");
-        }
+        const scope = global ? "globally" : "for this project";
+        const names = targets.map((h) => h.name).join(", ");
+        ctx.ui.notify(`Hooks disabled ${scope}: ${names}. /guard-hook enable to undo.`, "warning");
         return;
       }
 
       if (sub === "enable") {
-        if (global) {
-          set("lntrx-guard.hook", undefined);
-          ctx.ui.notify("Pre-commit hook enabled globally.", "success");
-        } else {
-          const cfg = projectConfig(ctx.cwd);
-          delete cfg.hook;
-          writeProjectConfig(ctx.cwd, cfg);
-          ctx.ui.notify("Pre-commit hook enabled for this project.", "success");
+        for (const hook of targets) {
+          if (global) {
+            set(`lntrx-guard.${hook.configKey}`, undefined);
+          } else {
+            const cfg = projectConfig(ctx.cwd);
+            delete (cfg as any)[hook.configKey];
+            writeProjectConfig(ctx.cwd, cfg);
+          }
+          if (hookEnabled(ctx.cwd, hook) && !hookInstalled(ctx.cwd, hook)) {
+            installHook(ctx.cwd, hook);
+          }
         }
-        // Re-install hook if in a repo
-        if (hookEnabled(ctx.cwd) && !hookInstalled(ctx.cwd)) {
-          installHook(ctx.cwd);
-          ctx.ui.notify("Pre-commit hook installed.", "success");
-        }
+        const scope = global ? "globally" : "for this project";
+        const names = targets.map((h) => h.name).join(", ");
+        ctx.ui.notify(`Hooks enabled ${scope}: ${names}.`, "success");
         return;
       }
 
       if (sub === "uninstall" || sub === "remove") {
-        const removed = removeHook(ctx.cwd);
-        ctx.ui.notify(removed ? "Pre-commit hook removed." : "No hook to remove.", removed ? "warning" : "info");
+        let removed = 0;
+        for (const hook of targets) {
+          if (removeHook(ctx.cwd, hook)) removed++;
+        }
+        ctx.ui.notify(removed > 0 ? `${removed} hook(s) removed.` : "No hooks to remove.", removed > 0 ? "warning" : "info");
         return;
       }
 
       if (sub === "install") {
-        const ok = installHook(ctx.cwd);
-        ctx.ui.notify(ok ? "Pre-commit hook installed." : "Not a git repo.", ok ? "success" : "error");
+        let installed = 0;
+        for (const hook of targets) {
+          if (installHook(ctx.cwd, hook)) installed++;
+        }
+        ctx.ui.notify(installed > 0 ? `${installed} hook(s) installed.` : "Not a git repo.", installed > 0 ? "success" : "error");
         return;
       }
 
       // Default: status
-      const globalOff = hookGloballyDisabled();
-      const projectOff = hookProjectDisabled(ctx.cwd);
-      const fileOk = hookInstalled(ctx.cwd);
+      const lines: string[] = [];
+      for (const hook of HOOKS) {
+        const globalOff = hookGloballyDisabled(hook.configKey);
+        const projectOff = hookProjectDisabled(ctx.cwd, hook.configKey);
+        const fileOk = hookInstalled(ctx.cwd, hook);
 
-      let msg = "";
-      if (globalOff) {
-        msg = "Pre-commit hook: DISABLED globally. /guard-hook enable --global";
-      } else if (projectOff) {
-        msg = "Pre-commit hook: DISABLED for this project. /guard-hook enable";
-      } else if (fileOk) {
-        msg = "Pre-commit hook: ACTIVE — main branch protected.";
-      } else {
-        msg = "Pre-commit hook: NOT INSTALLED. /guard-hook install";
+        let state: string;
+        if (globalOff) state = "OFF (global)";
+        else if (projectOff) state = "OFF (project)";
+        else if (fileOk) state = "ON";
+        else state = "MISSING";
+
+        lines.push(`  ${hook.name}: ${state}  [${hook.configKey}]`);
       }
-      ctx.ui.notify(msg, globalOff || projectOff ? "warning" : "info");
+      ctx.ui.notify(lines.join("\n"), "info");
     },
   });
 
