@@ -14,7 +14,6 @@ A persistent checklist that survives sessions. Stored in `.pi/memory/scratch.md`
 
 - `/memory scratch` — show all items
 - `/memory scratch add <item>` — add a new TODO
-- `/memory scratch global` — show global scratchpad (cross-project)
 
 ## When to use
 

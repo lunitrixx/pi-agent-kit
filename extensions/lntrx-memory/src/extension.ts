@@ -2,17 +2,13 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, extname } from "node:path";
-import { homedir } from "node:os";
 
-// ── Paths ──
-const GLOBAL_DIR = join(homedir(), ".pi", "agent", "memory");
+// ── Paths (project only — no global memory) ──
 const PROJ_DIR = () => join(process.cwd(), ".pi", "memory");
 
-type Tier = "global" | "project";
-function dir(t: Tier) { return t === "global" ? GLOBAL_DIR : PROJ_DIR(); }
-function cerebrum(t: Tier) { return join(dir(t), "cerebrum.md"); }
-function scratch(t: Tier) { return join(dir(t), "scratch.md"); }
-function dailyDir(t: Tier) { return join(dir(t), "daily"); }
+function cerebrum() { return join(PROJ_DIR(), "cerebrum.md"); }
+function scratch() { return join(PROJ_DIR(), "scratch.md"); }
+function dailyDir() { return join(PROJ_DIR(), "daily"); }
 function anatomy() { return join(PROJ_DIR(), "anatomy.md"); }
 function buglog() { return join(PROJ_DIR(), "buglog.json"); }
 
@@ -24,12 +20,12 @@ function now() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
 }
-function ensure(t: Tier) { const d = dir(t); mkdirSync(d, { recursive: true }); mkdirSync(dailyDir(t), { recursive: true }); }
+function ensure() { mkdirSync(PROJ_DIR(), { recursive: true }); mkdirSync(dailyDir(), { recursive: true }); }
 function rf(p: string): string { try { return readFileSync(p, "utf-8"); } catch { return ""; } }
 function wf(p: string, c: string) { mkdirSync(join(p, ".."), { recursive: true }); writeFileSync(p, c); }
 function rj<T>(p: string, fb: T): T { try { return JSON.parse(readFileSync(p, "utf-8")); } catch { return fb; } }
 function wj(p: string, d: unknown) { mkdirSync(join(p, ".."), { recursive: true }); writeFileSync(p, JSON.stringify(d, null, 2)); }
-function dailyFile(t: Tier, d?: string) { return join(dailyDir(t), `${d || today()}.md`); }
+function dailyFile(d?: string) { return join(dailyDir(), `${d || today()}.md`); }
 
 // ── Templates ──
 function cerebrumTpl(): string {
@@ -63,34 +59,29 @@ function scanAnatomy(root: string): string {
   walk(root);
   const g = new Map<string, string[]>();
   for (const e of entries) { let v = g.get(e.ext); if (!v) { v = []; g.set(e.ext, v); } v.push(`\`${e.path}\``); }
-  const lines = ["# Anatomy", "", `> ${entries.length} files · ${entries.reduce((s,e)=>s+e.tokens,0).toLocaleString()} est. tokens`, "> /memory scan", ""];
+  const lines = ["# Anatomy", "", `> ${entries.length} files · ${entries.reduce((s,e)=>s+e.tokens,0).toLocaleString()} est. tokens`, ""];
   for (const [ext, paths] of [...g].sort()) { lines.push(`## ${ext}`, ...paths, ""); }
   return lines.join("\n");
 }
 
 // ── Scratchpad ──
-function scratchList(t: Tier): string[] { return rf(scratch(t)).split("\n").filter((l) => l.match(/^- \[[ x]\] /)); }
-function scratchAdd(t: Tier, item: string) { wf(scratch(t), (rf(scratch(t)) || scratchTpl()).trimEnd() + `\n- [ ] ${item}\n`); }
-function scratchToggle(t: Tier, idx: number) {
-  const lines = rf(scratch(t)).split("\n"); let ci = 0;
-  for (let i = 0; i < lines.length; i++) { if (ci === idx && lines[i].match(/^- \[[ x]\] /)) { lines[i] = lines[i].startsWith("- [ ] ") ? lines[i].replace("- [ ] ", "- [x] ") : lines[i].replace("- [x] ", "- [ ] "); break; } ci++; }
-  wf(scratch(t), lines.join("\n"));
-}
+function scratchList(): string[] { return rf(scratch()).split("\n").filter((l) => l.match(/^- \[[ x]\] /)); }
+function scratchAdd(item: string) { wf(scratch(), (rf(scratch()) || scratchTpl()).trimEnd() + `\n- [ ] ${item}\n`); }
 
 // ── Daily log ──
-function dailyAppend(t: Tier, text: string) {
-  const f = dailyFile(t); wf(f, (rf(f) || `# Daily Log — ${today()}\n\n`) + `[${now()}] ${text}\n`);
+function dailyAppend(text: string) {
+  const f = dailyFile(); wf(f, (rf(f) || `# Daily Log — ${today()}\n\n`) + `[${now()}] ${text}\n`);
 }
-function dailyRead(t: Tier, date?: string): string { return rf(dailyFile(t, date)) || "(no entries)"; }
+function dailyRead(date?: string): string { return rf(dailyFile(date)) || "(no entries)"; }
 
 // ── Learning ──
-function learn(t: Tier, category: string, text: string) {
+function learn(category: string, text: string) {
   const section = { preference: "Preferences", convention: "Conventions", decision: "Decisions", bug: "Corrections" }[category] || "Conventions";
-  const lines = rf(cerebrum(t)).split("\n");
+  const lines = rf(cerebrum()).split("\n");
   const si = lines.findIndex((l) => l.startsWith(`## ${section}`));
   const entry = `- [${today()}] ${text}`;
   if (si >= 0) lines.splice(si + 2, 0, entry); else lines.push(`\n## ${section}\n\n${entry}\n`);
-  wf(cerebrum(t), lines.join("\n"));
+  wf(cerebrum(), lines.join("\n"));
 }
 
 // ── Correction detection ──
@@ -102,36 +93,31 @@ function isCorrection(t: string): boolean {
 
 // ── Extension ──
 export default function (pi: ExtensionAPI) {
-  let injected = false;
-  const tiers: Tier[] = ["global", "project"];
-  for (const t of tiers) {
-    ensure(t);
-    if (!rf(cerebrum(t))) wf(cerebrum(t), cerebrumTpl());
-    if (!rf(scratch(t))) wf(scratch(t), scratchTpl());
-    const c = rf(cerebrum(t)), u = markStale(c); if (u !== c) wf(cerebrum(t), u);
-  }
-  // Project-only files
-  ensure("project");
+  ensure();
+  if (!rf(cerebrum())) wf(cerebrum(), cerebrumTpl());
+  if (!rf(scratch())) wf(scratch(), scratchTpl());
+  const c = rf(cerebrum()), u = markStale(c); if (u !== c) wf(cerebrum(), u);
   if (!rf(anatomy())) wf(anatomy(), anatomyTpl());
   if (!rj(buglog(), null)) wj(buglog(), { bugs: [] });
+
+  let injected = false;
 
   // ── Session-start: inject memory + daily summary reminder ──
   pi.on("session_start", async () => {
     if (injected) return; injected = true;
 
     const parts: string[] = [];
-    for (const t of tiers) {
-      const c = rf(cerebrum(t)).trim();
-      const s = scratchList(t);
-      const d = dailyRead(t);
-      // Tight injection: extract only what's essential
-      const dnr = c.split("\n").filter((l) => l.match(/^- \[.*?(Correction|⚠️ stale)/));
-      const prefs = c.split("\n").filter((l) => l.match(/^- \[/) && !l.match(/Correction|⚠️ stale/)).slice(0, 5);
-      if (prefs.length) parts.push(`## ${t === "global" ? "Global" : "Project"} Key Facts\n${prefs.join("\n")}`);
-      if (dnr.length) parts.push(`## Do-Not-Repeat\n${dnr.join("\n")}`);
-      if (s.length) parts.push(`## Scratchpad (open)\n${s.join("\n")}`);
-      if (d !== "(no entries)") parts.push(`## Today\n${d.slice(-500)}`);
-    }
+    const c = rf(cerebrum()).trim();
+    const s = scratchList();
+    const d = dailyRead();
+
+    const prefs = c.split("\n").filter((l) => l.match(/^- \[/) && !l.match(/Correction|⚠️ stale/)).slice(0, 5);
+    const dnr = c.split("\n").filter((l) => l.match(/^- \[.*?(Correction|⚠️ stale)/));
+
+    if (prefs.length) parts.push(`## Project Key Facts\n${prefs.join("\n")}`);
+    if (dnr.length) parts.push(`## Do-Not-Repeat\n${dnr.join("\n")}`);
+    if (s.length) parts.push(`## Scratchpad (open)\n${s.join("\n")}`);
+    if (d !== "(no entries)") parts.push(`## Today\n${d.slice(-500)}`);
 
     if (parts.length > 0) {
       pi.sendMessage({ customType: "lntrx-memory-context", content: parts.join("\n\n"), display: false });
@@ -140,7 +126,7 @@ export default function (pi: ExtensionAPI) {
     // Remind to summarize yesterday if needed
     const yday = new Date(Date.now() - 86400000);
     const yd = `${yday.getFullYear()}-${String(yday.getMonth()+1).padStart(2,"0")}-${String(yday.getDate()).padStart(2,"0")}`;
-    const rawYesterday = dailyRead("project", yd);
+    const rawYesterday = dailyRead(yd);
     if (rawYesterday !== "(no entries)" && !rawYesterday.includes("Today built") && !rawYesterday.includes("worked on")) {
       pi.sendMessage({
         customType: "lntrx-memory-reminder",
@@ -152,8 +138,7 @@ export default function (pi: ExtensionAPI) {
 
   // ── Session-end: inject daily summary task ──
   pi.on("session_shutdown", async () => {
-    // Write a raw marker so daily-summarize knows there's work to consolidate
-    dailyAppend("project", "Session completed — call /memory daily-summarize in the next session");
+    dailyAppend("Session completed — call /memory daily-summarize in the next session");
   });
 
   // ── Correction detection ──
@@ -165,40 +150,39 @@ export default function (pi: ExtensionAPI) {
   pi.on("message_start", async (e) => {
     if (e.message.role !== "user" || !lastAsst) return;
     const t = typeof e.message.content === "string" ? e.message.content : Array.isArray(e.message.content) ? e.message.content.filter((p: any) => p?.type === "text").map((p: any) => p.text).join(" ") : "";
-    if (isCorrection(t)) learn("project", "bug", `Correction: ${t.replace(/\n/g, " ").slice(0, 200)}`);
+    if (isCorrection(t)) learn("bug", `Correction: ${t.replace(/\n/g, " ").slice(0, 200)}`);
   });
 
   // ── /memory command ──
   pi.registerCommand("memory", {
-    description: "Memory: show|learn|forget|scan|bug|scratch|daily [global|project]",
+    description: "Memory: show|learn|forget|scan|bug|scratch|daily",
     handler: async (args, ctx) => {
       const [sub, ...rest] = args.trim().split(/\s+/);
       const txt = rest.join(" ");
-      const tier: Tier = rest[rest.length - 1] === "global" ? "global" : "project";
 
-      if (!sub || sub === "show") { pi.sendMessage({ customType: "memory", content: `**Global:**\n${rf(cerebrum("global"))}\n\n**Project:**\n${rf(cerebrum("project"))}`, display: true }); return; }
-      if (sub === "learn") { if (!txt) { ctx.ui.notify("/memory learn <text> [global|project]", "warning"); return; } learn(tier, "convention", txt); ctx.ui.notify(`Learned (${tier}).`, "success"); return; }
-      if (sub === "forget") { if (!txt) { ctx.ui.notify("/memory forget <pattern> [global|project]", "warning"); return; } wf(cerebrum(tier), rf(cerebrum(tier)).split("\n").filter((l) => !l.toLowerCase().includes(txt.toLowerCase())).join("\n")); ctx.ui.notify(`Forgot "${txt}" (${tier}).`, "success"); return; }
+      if (!sub || sub === "show") { pi.sendMessage({ customType: "memory", content: rf(cerebrum()), display: true }); return; }
+      if (sub === "learn") { if (!txt) { ctx.ui.notify("/memory learn <text>", "warning"); return; } learn("convention", txt); ctx.ui.notify("Learned.", "success"); return; }
+      if (sub === "forget") { if (!txt) { ctx.ui.notify("/memory forget <pattern>", "warning"); return; } wf(cerebrum(), rf(cerebrum()).split("\n").filter((l) => !l.toLowerCase().includes(txt.toLowerCase())).join("\n")); ctx.ui.notify(`Forgot "${txt}".`, "success"); return; }
       if (sub === "scan") { ctx.ui.notify("Scanning...", "info"); wf(anatomy(), scanAnatomy(process.cwd())); ctx.ui.notify("Anatomy updated.", "success"); return; }
       if (sub === "bug") { const bl = rj<{ bugs: any[] }>(buglog(), { bugs: [] }); pi.sendMessage({ customType: "memory", content: bl.bugs.length ? `**Bugs:**\n${bl.bugs.map((b: any,i: number) => `${i+1}. ${b.error||b.message} → ${b.fix||"?"}`).join("\n")}` : "No bugs.", display: true }); return; }
-      if (sub === "scratch") { if (!txt) { pi.sendMessage({ customType: "memory", content: `**Scratchpad:**\n${scratchList(tier).join("\n") || "(empty)"}`, display: true }); return; } if (txt.startsWith("add ")) { scratchAdd(tier, txt.slice(4)); ctx.ui.notify("Added.", "success"); } else { ctx.ui.notify("/memory scratch add <item> [global|project]", "info"); } return; }
+      if (sub === "scratch") { if (!txt) { pi.sendMessage({ customType: "memory", content: `**Scratchpad:**\n${scratchList().join("\n") || "(empty)"}`, display: true }); return; } if (txt.startsWith("add ")) { scratchAdd(txt.slice(4)); ctx.ui.notify("Added.", "success"); } else { ctx.ui.notify("/memory scratch add <item>", "info"); } return; }
       if (sub === "daily") {
         const date = rest[0]?.match(/^\d{4}-\d{2}-\d{2}$/) ? rest[0] : today();
-        pi.sendMessage({ customType: "memory", content: `**Daily — ${date}:**\n${dailyRead(tier, date)}`, display: true });
+        pi.sendMessage({ customType: "memory", content: `**Daily — ${date}:**\n${dailyRead(date)}`, display: true });
         return;
       }
       if (sub === "daily-summarize") {
-        const raw = dailyRead(tier, today());
+        const raw = dailyRead(today());
         pi.sendMessage({ customType: "memory", content: `Summarize today's work into a clean daily log entry. Read the current log below, consolidate into a narrative of accomplishments, and rewrite with /memory rewrite-daily:\n\n${raw}`, display: true });
         return;
       }
       if (sub === "rewrite-daily") {
         if (!txt) { ctx.ui.notify("/memory rewrite-daily <summary>", "warning"); return; }
-        wf(dailyFile(tier), `# Daily Log — ${today()}\n\n${txt}`);
+        wf(dailyFile(), `# Daily Log — ${today()}\n\n${txt}`);
         ctx.ui.notify("Daily log rewritten.", "success");
         return;
       }
-      ctx.ui.notify("/memory show|learn|forget|scan|bug|scratch|daily|daily-summarize [global|project]", "info");
+      ctx.ui.notify("/memory show|learn|forget|scan|bug|scratch|daily|daily-summarize", "info");
     },
   });
 
@@ -208,7 +192,7 @@ export default function (pi: ExtensionAPI) {
     description: "Save a learning to cross-session memory",
     promptSnippet: "Record what you just learned",
     parameters: Type.Object({ category: Type.String({ description: "preference, convention, decision, or bug" }), text: Type.String({ description: "[Context] → [What you learned]" }) }),
-    async execute(_id, p) { learn("project", p.category, p.text); return { content: [{ type: "text", text: `Saved.` }] }; },
+    async execute(_id, p) { learn(p.category, p.text); return { content: [{ type: "text", text: `Saved.` }] }; },
   });
 
   pi.registerTool({
@@ -218,7 +202,7 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({ query: Type.String({}), source: Type.String({ description: "cerebrum, buglog, or anatomy" }) }),
     async execute(_id, p) {
       let content = "";
-      if (p.source === "cerebrum") content = rf(cerebrum("project")) + "\n" + rf(cerebrum("global"));
+      if (p.source === "cerebrum") content = rf(cerebrum());
       else if (p.source === "buglog") content = JSON.stringify(rj(buglog(), { bugs: [] }), null, 2);
       else if (p.source === "anatomy") content = rf(anatomy());
       else return { content: [{ type: "text", text: `Unknown source. Use cerebrum, buglog, or anatomy.` }], isError: true };

@@ -83,7 +83,6 @@ Markdown/JSON — **every agent should consult them**:
 - `.pi/memory/buglog.json` — known bugs and their fixes
 - `.pi/memory/scratch.md` — persistent TODO checklist
 - `.pi/memory/daily/` — daily work log
-- `~/.pi/agent/memory/` — global memory (preferences across all projects)
 
 Use `/memory show`, `/memory scan`, `lntrx_memory_search`, and
 `lntrx_memory_learn` to interact with memory.
