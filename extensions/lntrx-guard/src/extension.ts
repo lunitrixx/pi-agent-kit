@@ -63,7 +63,7 @@ function scanSecrets(text: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Git hooks — block direct commits/pushes to main
+// Git hooks — block direct commits to main
 // ---------------------------------------------------------------------------
 
 const PRE_COMMIT_HOOK = `#!/bin/sh
@@ -79,32 +79,15 @@ if [ "$BRANCH" = "main" ]; then
 fi
 `;
 
-const PRE_PUSH_HOOK = `#!/bin/sh
-# Installed by lntrx-guard — do not edit manually
-REMOTE="$1"
-URL="$2"
-while read LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
-  BRANCH=$(echo "$LOCAL_REF" | sed 's|refs/heads/||')
-  if [ "$BRANCH" = "main" ]; then
-    echo ""
-    echo "  lntrx-guard: Direct pushes to main are blocked."
-    echo "  Changes must land via pull request only."
-    echo "  Bypass with: git push --no-verify"
-    echo ""
-    exit 1
-  fi
-done
-`;
 
 interface HookDef {
   name: string;          // file name in .git/hooks/
-  configKey: string;     // dotted namespace key
+  configKey: string;     // full dotted namespace key (same in global and project config)
   script: string;
 }
 
 const HOOKS: HookDef[] = [
-  { name: "pre-commit", configKey: "git-hooks.block-main-commit", script: PRE_COMMIT_HOOK },
-  { name: "pre-push",   configKey: "git-hooks.block-main-push",   script: PRE_PUSH_HOOK },
+  { name: "pre-commit", configKey: "lntrx-guard.git-hooks.block-main-commit", script: PRE_COMMIT_HOOK },
 ];
 
 function projectConfigPath(repoPath: string): string {
@@ -124,12 +107,12 @@ function writeProjectConfig(repoPath: string, cfg: Record<string, unknown>): voi
   writeFileSync(projectConfigPath(repoPath), JSON.stringify(cfg, null, 2) + "\n");
 }
 
-function hookGloballyDisabled(key: string): boolean {
-  return get(`lntrx-guard.${key}`) === false;
+function hookGloballyDisabled(configKey: string): boolean {
+  return get(configKey) === false;
 }
 
-function hookProjectDisabled(repoPath: string, key: string): boolean {
-  return (projectConfig(repoPath) as any)?.[key] === false;
+function hookProjectDisabled(repoPath: string, configKey: string): boolean {
+  return (projectConfig(repoPath) as any)?.[configKey] === false;
 }
 
 function hookEnabled(repoPath: string, hook: HookDef): boolean {
@@ -186,8 +169,10 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("guard-hook", {
     description: "Manage git hooks: status, install, uninstall, disable, enable [--global] [hook-name]",
     getArgumentCompletions: (prefix) => {
-      const subs = ["status", "install", "uninstall", "disable", "enable"];
-      const match = subs.filter((s) => s.startsWith(prefix));
+      const verbs = ["status", "install", "uninstall", "disable", "enable"];
+      const hooks = HOOKS.map((h) => h.name);
+      const all = [...verbs, ...hooks];
+      const match = all.filter((s) => s.startsWith(prefix));
       return match.length > 0 ? match.map((s) => ({ value: s, label: s })) : null;
     },
     handler: async (args, ctx) => {
@@ -201,7 +186,7 @@ export default function (pi: ExtensionAPI) {
       if (sub === "disable") {
         for (const hook of targets) {
           if (global) {
-            set(`lntrx-guard.${hook.configKey}`, false);
+            set(hook.configKey, false);
           } else {
             const cfg = projectConfig(ctx.cwd);
             (cfg as any)[hook.configKey] = false;
@@ -218,7 +203,7 @@ export default function (pi: ExtensionAPI) {
       if (sub === "enable") {
         for (const hook of targets) {
           if (global) {
-            set(`lntrx-guard.${hook.configKey}`, undefined);
+            set(hook.configKey, undefined);
           } else {
             const cfg = projectConfig(ctx.cwd);
             delete (cfg as any)[hook.configKey];
