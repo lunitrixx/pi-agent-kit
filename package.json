@@ -1,9 +1,8 @@
 {
-  "name": "pi-agent-kit",
+  "name": "@lunitrixx/pi-agent-kit",
   "version": "0.1.0",
   "description": "Pi-native agent kit: extensions, skills, themes, prompts, and agents for pi-coding-agent",
   "type": "module",
-  "private": true,
   "workspaces": [
     "extensions/*"
   ],
