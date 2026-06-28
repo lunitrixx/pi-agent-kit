@@ -4,7 +4,7 @@
  * Features: FTS5 full-text search, project anatomy scanner, structured
  * buglog, correction detection, and <remember> block auto-capture.
  *
- * - Storage: single SQLite file at XDG_DATA_HOME/pi/memory.db
+ * - Storage: single SQLite file at ~/.pi/memory.db
  * - Project-scoped by default; scope="global" for cross-project memories.
  * - Requires Node 24+ (stable node:sqlite).
  */
@@ -54,8 +54,7 @@ try {
 
 export function defaultDbPath(): string {
   if (process.env.LNTRX_MEMORY_DB) return process.env.LNTRX_MEMORY_DB;
-  const xdg = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
-  return path.join(xdg, "pi", "memory.db");
+  return path.join(os.homedir(), ".pi", "memory.db");
 }
 
 export function detectProject(cwd: string): string {
