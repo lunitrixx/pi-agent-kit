@@ -1,6 +1,39 @@
 # Changelog
 
-## 0.1.0 (2026-06-26)
+## 0.2.0 - 2026-06-28
+
+### Added
+- Central config extension with project-scoped `getProject`/`setProject`
+- Guard: 4 new risk patterns (SOPS wildcard, curl|bash, git push --delete, npm publish)
+- Per-risk guard enable/disable via `/safety risk` subcommand (global + project)
+- Memory extension rewritten with SQLite+FTS5 backend (anatomy scanner, bug tracking, `<remember>` auto-capture)
+- `lntrx_memory_bug` and `lntrx_memory_forget` tools
+- `/memory bug add|fix|close|delete` commands
+- Auto-anatomy scan on session start (stale after 24h)
+- Correction detection: auto-saves bugs when user corrects assistant
+- Versioning skill and Keep a Changelog formatting
+- `.npmignore` to prevent project-local agent state from being published
+- Project skill under `.pi/skills/config-architecture/`
+- Test suites: 17 config API tests + 26 extension logic tests + 25 memory tests
+
+### Changed
+- Guard: project config now has priority over global (project > global > default)
+- Guard: `/safety on|off` supports `--global` flag, defaults to project scope
+- Lang: `/lang` supports `--global` flag, project language overrides global
+- Rules: banner visibility is per-project via `/rules-toggle [--global]`
+- Rules: injected block header now says "mandatory" instead of informational paths
+- Config file moved from extensions to root `tests/` directory
+
+### Fixed
+- YAML colon in skill description broke parser
+- Em dash replaced with plain hyphen in `.npmignore`
+
+### Removed
+- Memory: daily log and scratchpad (replaced by SQLite backend)
+
+---
+
+## 0.1.0 - 2026-06-26
 
 ### Added
 - 13 Pi extensions: config, context, fmt, footer, grill-me, guard, header, health, lang, localmodels, lsp, memory, project-rules
