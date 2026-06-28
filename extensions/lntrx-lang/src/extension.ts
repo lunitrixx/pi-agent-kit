@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { get, set } from "../../lntrx-config/src/config";
+import { get, set, getProject, setProject } from "../../lntrx-config/src/config";
 
 const NS = "lntrx-lang";
 
@@ -13,16 +13,21 @@ const LANG_MAP: Record<string, string> = {
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("lang", {
-    description: "Set or show the response language (de, en, fr, es, ja)",
+    description: "Set or show the response language. /lang <code> [--global] (de, en, fr, es, ja)",
     handler: async (args, ctx) => {
-      const code = args?.trim().toLowerCase() ?? "";
+      const parts = args?.trim().split(/\s+/) ?? [];
+      const code = parts[0]?.toLowerCase() ?? "";
+      const global = parts.includes("--global") || parts.includes("-g");
 
       if (!code) {
         const current = get(NS) as string | undefined;
-        if (current) {
-          ctx.ui.notify(`Current language: ${current}`, "info");
+        const projectCode = getProject(ctx.cwd, NS) as string | undefined;
+        if (projectCode) {
+          ctx.ui.notify(`Language: ${projectCode} (project)${current ? ` — global default: ${current}` : ""}`, "info");
+        } else if (current) {
+          ctx.ui.notify(`Language: ${current} (global)`, "info");
         } else {
-          ctx.ui.notify("No language set. Use /lang <code> (de, en, fr, es, ja)", "info");
+          ctx.ui.notify("No language set. Use /lang <code> [--global] (de, en, fr, es, ja)", "info");
         }
         return;
       }
@@ -32,13 +37,19 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      set(NS, code);
-      ctx.ui.notify(`Language set to: ${code}`, "success");
+      if (global) {
+        set(NS, code);
+      } else {
+        setProject(ctx.cwd, NS, code);
+      }
+      const scope = global ? "globally" : "for this project";
+      ctx.ui.notify(`Language set to ${code} ${scope}.`, "success");
     },
   });
 
-  pi.on("before_agent_start", async (event) => {
-    const code = get(NS) as string | undefined;
+  pi.on("before_agent_start", async (event, ctx) => {
+    const projectCode = getProject(ctx.cwd, NS) as string | undefined;
+    const code = projectCode ?? get(NS) as string | undefined;
     if (!code || !LANG_MAP[code]) return;
 
     return {
