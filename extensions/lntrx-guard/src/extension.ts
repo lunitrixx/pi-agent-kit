@@ -1,14 +1,16 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execSync } from "child_process";
-import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
+import { existsSync, writeFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
-import { get, set } from "../../lntrx-config/src/config";
+import { get, set, getProject, setProject } from "../../lntrx-config/src/config";
 
 const NS = "lntrx-guard";
 
-function on(): boolean {
-  const v = get(NS);
-  return v === undefined ? true : !!v; // on by default
+function on(repoPath: string): boolean {
+  const g = get(NS);
+  if (g !== undefined) return !!g;       // global master switch takes precedence
+  const p = getProject(repoPath, NS);
+  return p === undefined ? true : !!p;   // on by default
 }
 
 interface Risk {
@@ -24,7 +26,7 @@ function riskConfigKey(id: string): string { return `${NS}.risks.${id}`; }
 function riskGloballyDisabled(id: string): boolean { return get(riskConfigKey(id)) === false; }
 
 function riskProjectDisabled(repoPath: string, id: string): boolean {
-  return (projectConfig(repoPath) as any)?.[riskConfigKey(id)] === false;
+  return getProject(repoPath, riskConfigKey(id)) === false;
 }
 
 function riskEnabled(repoPath: string, id: string): boolean {
@@ -109,29 +111,12 @@ const HOOKS: HookDef[] = [
   { name: "pre-commit", configKey: "lntrx-guard.git-hooks.block-main-commit", script: PRE_COMMIT_HOOK },
 ];
 
-function projectConfigPath(repoPath: string): string {
-  return join(repoPath, ".pi", "pi-agent-kit.json");
-}
-
-function projectConfig(repoPath: string): Record<string, unknown> {
-  try {
-    return JSON.parse(readFileSync(projectConfigPath(repoPath), "utf-8"));
-  } catch {
-    return {};
-  }
-}
-
-function writeProjectConfig(repoPath: string, cfg: Record<string, unknown>): void {
-  mkdirSync(join(repoPath, ".pi"), { recursive: true });
-  writeFileSync(projectConfigPath(repoPath), JSON.stringify(cfg, null, 2) + "\n");
-}
-
 function hookGloballyDisabled(configKey: string): boolean {
   return get(configKey) === false;
 }
 
 function hookProjectDisabled(repoPath: string, configKey: string): boolean {
-  return (projectConfig(repoPath) as any)?.[configKey] === false;
+  return getProject(repoPath, configKey) === false;
 }
 
 function hookEnabled(repoPath: string, hook: HookDef): boolean {
@@ -168,7 +153,7 @@ function removeHook(repoPath: string, hook: HookDef): boolean {
 export default function (pi: ExtensionAPI) {
   // ---- Session start: sync all git hooks ----
   pi.on("session_start", async (_event, ctx) => {
-    if (!on()) return;
+    if (!on(ctx.cwd)) return;
     for (const hook of HOOKS) {
       if (!hookEnabled(ctx.cwd, hook)) {
         if (hookInstalled(ctx.cwd, hook)) {
@@ -207,9 +192,7 @@ export default function (pi: ExtensionAPI) {
           if (global) {
             set(hook.configKey, false);
           } else {
-            const cfg = projectConfig(ctx.cwd);
-            (cfg as any)[hook.configKey] = false;
-            writeProjectConfig(ctx.cwd, cfg);
+            setProject(ctx.cwd, hook.configKey, false);
           }
           if (hookInstalled(ctx.cwd, hook)) removeHook(ctx.cwd, hook);
         }
@@ -224,9 +207,7 @@ export default function (pi: ExtensionAPI) {
           if (global) {
             set(hook.configKey, undefined);
           } else {
-            const cfg = projectConfig(ctx.cwd);
-            delete (cfg as any)[hook.configKey];
-            writeProjectConfig(ctx.cwd, cfg);
+            setProject(ctx.cwd, hook.configKey, undefined);
           }
           if (hookEnabled(ctx.cwd, hook) && !hookInstalled(ctx.cwd, hook)) {
             installHook(ctx.cwd, hook);
@@ -276,7 +257,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("safety", {
-    description: "Manage safety guard. /safety on|off|status | /safety risk enable|disable|list [--global] [<risk-id>]",
+    description: "Manage safety guard. /safety on|off [--global] | /safety risk enable|disable|list [--global] [<risk-id>]",
     getArgumentCompletions: (prefix) => {
       const top = ["on", "off", "status", "risk"];
       const match = top.filter((s) => s.startsWith(prefix));
@@ -299,9 +280,7 @@ export default function (pi: ExtensionAPI) {
             if (global) {
               set(riskConfigKey(r.id), false);
             } else {
-              const cfg = projectConfig(ctx.cwd);
-              (cfg as any)[riskConfigKey(r.id)] = false;
-              writeProjectConfig(ctx.cwd, cfg);
+              setProject(ctx.cwd, riskConfigKey(r.id), false);
             }
           }
           const scope = global ? "globally" : "for this project";
@@ -316,9 +295,7 @@ export default function (pi: ExtensionAPI) {
             if (global) {
               set(riskConfigKey(r.id), undefined);
             } else {
-              const cfg = projectConfig(ctx.cwd);
-              delete (cfg as any)[riskConfigKey(r.id)];
-              writeProjectConfig(ctx.cwd, cfg);
+              setProject(ctx.cwd, riskConfigKey(r.id), undefined);
             }
           }
           const scope = global ? "globally" : "for this project";
@@ -328,7 +305,7 @@ export default function (pi: ExtensionAPI) {
         }
 
         // Default: list
-        const lines: string[] = [`Safety risks (${on() ? "guard ON" : "guard OFF"}):`, ""];
+        const lines: string[] = [`Safety risks (${on(ctx.cwd) ? "guard ON" : "guard OFF"}):`, ""];
         for (const r of RISKS) {
           const gOff = riskGloballyDisabled(r.id);
           const pOff = riskProjectDisabled(ctx.cwd, r.id);
@@ -344,14 +321,27 @@ export default function (pi: ExtensionAPI) {
       }
 
       // ---- top-level on/off ----
-      if (sub === "off") { set(NS, false); ctx.ui.notify("Safety guard OFF — dangerous commands run unchecked.", "warning"); }
-      else if (sub === "on") { set(NS, true); ctx.ui.notify("Safety guard ON.", "success"); }
-      else { ctx.ui.notify(`Safety guard: ${on() ? "ON" : "OFF"}. /safety on|off | /safety risk list`, "info"); }
+      if (sub === "off") {
+        if (global) { set(NS, false); } else { setProject(ctx.cwd, NS, false); }
+        const scope = global ? "globally" : "for this project";
+        ctx.ui.notify(`Safety guard OFF ${scope} — dangerous commands run unchecked.`, "warning");
+      }
+      else if (sub === "on") {
+        if (global) { set(NS, undefined); } else { setProject(ctx.cwd, NS, undefined); }
+        const scope = global ? "globally" : "for this project";
+        ctx.ui.notify(`Safety guard ON ${scope}.`, "success");
+      }
+      else {
+        const gOff = get(NS) === false;
+        const pOff = getProject(ctx.cwd, NS) === false;
+        const state = gOff ? "OFF (global)" : pOff ? "OFF (project)" : "ON";
+        ctx.ui.notify(`Safety guard: ${state}. /safety on|off [--global] | /safety risk list`, "info");
+      }
     },
   });
 
   pi.on("tool_call", async (event, ctx) => {
-    if (!on()) return;
+    if (!on(ctx.cwd)) return;
 
     // Secret scanning for write/edit
     if (event.toolName === "write" || event.toolName === "edit") {
