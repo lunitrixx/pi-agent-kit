@@ -239,15 +239,15 @@ test("defaultDbPath honours LNTRX_MEMORY_DB", () => {
   finally { if (prev === undefined) delete process.env.LNTRX_MEMORY_DB; else process.env.LNTRX_MEMORY_DB = prev; }
 });
 
-test("defaultDbPath falls back to XDG", () => {
+test("defaultDbPath falls back to ~/.pi/memory.db", () => {
   const prevDb = process.env.LNTRX_MEMORY_DB;
-  const prevXdg = process.env.XDG_DATA_HOME;
+  const prevHome = process.env.HOME;
   delete process.env.LNTRX_MEMORY_DB;
-  process.env.XDG_DATA_HOME = "/tmp/xdg";
-  try { assert.equal(defaultDbPath(), "/tmp/xdg/pi/memory.db"); }
+  process.env.HOME = "/home/testuser";
+  try { assert.equal(defaultDbPath(), "/home/testuser/.pi/memory.db"); }
   finally {
     if (prevDb === undefined) delete process.env.LNTRX_MEMORY_DB; else process.env.LNTRX_MEMORY_DB = prevDb;
-    if (prevXdg === undefined) delete process.env.XDG_DATA_HOME; else process.env.XDG_DATA_HOME = prevXdg;
+    if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
   }
 });
 
