@@ -7,10 +7,10 @@ import { get, set, getProject, setProject } from "../../lntrx-config/src/config"
 const NS = "lntrx-guard";
 
 function on(repoPath: string): boolean {
-  const g = get(NS);
-  if (g !== undefined) return !!g;       // global master switch takes precedence
   const p = getProject(repoPath, NS);
-  return p === undefined ? true : !!p;   // on by default
+  if (p !== undefined) return !!p;       // project overrides global
+  const g = get(NS);
+  return g === undefined ? true : !!g;   // default on
 }
 
 interface Risk {
@@ -23,16 +23,11 @@ interface Risk {
 
 function riskConfigKey(id: string): string { return `${NS}.risks.${id}`; }
 
-function riskGloballyDisabled(id: string): boolean { return get(riskConfigKey(id)) === false; }
-
-function riskProjectDisabled(repoPath: string, id: string): boolean {
-  return getProject(repoPath, riskConfigKey(id)) === false;
-}
-
 function riskEnabled(repoPath: string, id: string): boolean {
-  if (riskGloballyDisabled(id)) return false;
-  if (riskProjectDisabled(repoPath, id)) return false;
-  return true;
+  const p = getProject(repoPath, riskConfigKey(id));
+  if (p !== undefined) return !!p;
+  const g = get(riskConfigKey(id));
+  return g === undefined ? true : !!g;
 }
 
 const RISKS: Risk[] = [
@@ -111,18 +106,11 @@ const HOOKS: HookDef[] = [
   { name: "pre-commit", configKey: "lntrx-guard.git-hooks.block-main-commit", script: PRE_COMMIT_HOOK },
 ];
 
-function hookGloballyDisabled(configKey: string): boolean {
-  return get(configKey) === false;
-}
-
-function hookProjectDisabled(repoPath: string, configKey: string): boolean {
-  return getProject(repoPath, configKey) === false;
-}
-
 function hookEnabled(repoPath: string, hook: HookDef): boolean {
-  if (hookGloballyDisabled(hook.configKey)) return false;
-  if (hookProjectDisabled(repoPath, hook.configKey)) return false;
-  return true;
+  const p = getProject(repoPath, hook.configKey);
+  if (p !== undefined) return !!p;
+  const g = get(hook.configKey);
+  return g === undefined ? true : !!g;
 }
 
 function hookInstalled(repoPath: string, hook: HookDef): boolean {
@@ -240,13 +228,13 @@ export default function (pi: ExtensionAPI) {
       // Default: status
       const lines: string[] = [];
       for (const hook of HOOKS) {
-        const globalOff = hookGloballyDisabled(hook.configKey);
-        const projectOff = hookProjectDisabled(ctx.cwd, hook.configKey);
+        const pv = getProject(ctx.cwd, hook.configKey);
+        const gv = get(hook.configKey);
         const fileOk = hookInstalled(ctx.cwd, hook);
 
         let state: string;
-        if (globalOff) state = "OFF (global)";
-        else if (projectOff) state = "OFF (project)";
+        if (pv !== undefined) state = pv ? "ON (project)" : "OFF (project)";
+        else if (gv !== undefined) state = gv ? "ON (global)" : "OFF (global)";
         else if (fileOk) state = "ON";
         else state = "MISSING";
 
@@ -307,11 +295,11 @@ export default function (pi: ExtensionAPI) {
         // Default: list
         const lines: string[] = [`Safety risks (${on(ctx.cwd) ? "guard ON" : "guard OFF"}):`, ""];
         for (const r of RISKS) {
-          const gOff = riskGloballyDisabled(r.id);
-          const pOff = riskProjectDisabled(ctx.cwd, r.id);
+          const pv = getProject(ctx.cwd, riskConfigKey(r.id));
+          const gv = get(riskConfigKey(r.id));
           let state: string;
-          if (gOff) state = "OFF (global)";
-          else if (pOff) state = "OFF (project)";
+          if (pv !== undefined) state = pv ? "ON (project)" : "OFF (project)";
+          else if (gv !== undefined) state = gv ? "ON (global)" : "OFF (global)";
           else state = "ON";
           const icon = r.severity === "destructive" ? "🔥" : "⚠️";
           lines.push(`  ${icon} ${r.id.padEnd(18)} ${state.padEnd(16)} ${r.label}`);
@@ -332,9 +320,12 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify(`Safety guard ON ${scope}.`, "success");
       }
       else {
-        const gOff = get(NS) === false;
-        const pOff = getProject(ctx.cwd, NS) === false;
-        const state = gOff ? "OFF (global)" : pOff ? "OFF (project)" : "ON";
+        const pv = getProject(ctx.cwd, NS);
+        const gv = get(NS);
+        let state: string;
+        if (pv !== undefined) state = pv ? "ON (project)" : "OFF (project)";
+        else if (gv !== undefined) state = gv ? "ON (global)" : "OFF (global)";
+        else state = "ON";
         ctx.ui.notify(`Safety guard: ${state}. /safety on|off [--global] | /safety risk list`, "info");
       }
     },

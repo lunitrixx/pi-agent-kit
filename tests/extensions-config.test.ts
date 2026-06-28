@@ -63,10 +63,10 @@ function setProject(ns: string, value: unknown): void {
 const GUARD_NS = "lntrx-guard";
 
 function guardOn(repoPath: string): boolean {
-  const g = get(GUARD_NS);
-  if (g !== undefined) return !!g;
   const p = getProject(GUARD_NS);
-  return p === undefined ? true : !!p;
+  if (p !== undefined) return !!p;
+  const g = get(GUARD_NS);
+  return g === undefined ? true : !!g;
 }
 
 // --- Guard: riskEnabled(repoPath, id) ---
@@ -74,18 +74,11 @@ function riskConfigKey(id: string): string {
   return `${GUARD_NS}.risks.${id}`;
 }
 
-function riskGloballyDisabled(id: string): boolean {
-  return get(riskConfigKey(id)) === false;
-}
-
-function riskProjectDisabled(id: string): boolean {
-  return getProject(riskConfigKey(id)) === false;
-}
-
 function riskEnabled(repoPath: string, id: string): boolean {
-  if (riskGloballyDisabled(id)) return false;
-  if (riskProjectDisabled(id)) return false;
-  return true;
+  const p = getProject(riskConfigKey(id));
+  if (p !== undefined) return !!p;
+  const g = get(riskConfigKey(id));
+  return g === undefined ? true : !!g;
 }
 
 // --- Guard: hookEnabled ---
@@ -94,9 +87,10 @@ function hookConfigKey(): string {
 }
 
 function hookEnabled(repoPath: string): boolean {
-  if (get(hookConfigKey()) === false) return false;
-  if (getProject(hookConfigKey()) === false) return false;
-  return true;
+  const p = getProject(hookConfigKey());
+  if (p !== undefined) return !!p;
+  const g = get(hookConfigKey());
+  return g === undefined ? true : !!g;
 }
 
 // --- Rules: isVisible ---
@@ -171,10 +165,10 @@ test("guardOn false when project is false", () => {
   setProject(GUARD_NS, undefined);
 });
 
-test("guardOn false when global is false (project true ignored)", () => {
+test("guardOn true when project true overrides global false", () => {
   set(GUARD_NS, false);
   setProject(GUARD_NS, true);
-  assert.equal(guardOn(projectRoot), false);
+  assert.equal(guardOn(projectRoot), true);
   set(GUARD_NS, undefined);
   setProject(GUARD_NS, undefined);
 });
@@ -215,6 +209,14 @@ test("riskEnabled false when both disabled", () => {
   setProject(riskConfigKey("sudo"), undefined);
 });
 
+test("riskEnabled true when project true overrides global false", () => {
+  set(riskConfigKey("sudo"), false);
+  setProject(riskConfigKey("sudo"), true);
+  assert.equal(riskEnabled(projectRoot, "sudo"), true);
+  set(riskConfigKey("sudo"), undefined);
+  setProject(riskConfigKey("sudo"), undefined);
+});
+
 test("riskEnabled — unrelated risk unaffected", () => {
   set(riskConfigKey("sudo"), false);
   assert.equal(riskEnabled(projectRoot, "pipe-shell"), true);
@@ -248,6 +250,14 @@ test("hookEnabled false when globally disabled", () => {
 test("hookEnabled false when project-disabled", () => {
   setProject(hookConfigKey(), false);
   assert.equal(hookEnabled(projectRoot), false);
+  setProject(hookConfigKey(), undefined);
+});
+
+test("hookEnabled true when project true overrides global false", () => {
+  set(hookConfigKey(), false);
+  setProject(hookConfigKey(), true);
+  assert.equal(hookEnabled(projectRoot), true);
+  set(hookConfigKey(), undefined);
   setProject(hookConfigKey(), undefined);
 });
 
