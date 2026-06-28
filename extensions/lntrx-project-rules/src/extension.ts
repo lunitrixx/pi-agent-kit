@@ -3,7 +3,7 @@ import { DynamicBorder } from "@earendil-works/pi-coding-agent";
 import { Container, Text } from "@earendil-works/pi-tui";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { get as configGet, set as configSet } from "../../lntrx-config/src/config";
+import { get as configGet, set as configSet, getProject, setProject } from "../../lntrx-config/src/config";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -105,14 +105,20 @@ export default function (pi: ExtensionAPI) {
     currentRules = getRulesFiles(cwd);
   }
 
-  // ---- Session start: show banner widget + footer status ----
-  // Persisted preference from lntrx-config
-  let rulesVisible = configGet("project-rules.visible") !== false;
+  // ---- Visibility helper (project > global > default true) ----
+  function isVisible(cwd: string): boolean {
+    const p = getProject(cwd, "project-rules.visible");
+    if (p !== undefined) return !!p;
+    const g = configGet("project-rules.visible");
+    if (g !== undefined) return !!g;
+    return true;
+  }
 
+  // ---- Session start: show banner widget + footer status ----
   pi.on("session_start", async (_event, ctx) => {
     rescan(ctx.cwd);
     if (currentRules.length === 0) return;
-    if (!rulesVisible) return;
+    if (!isVisible(ctx.cwd)) return;
 
     // Banner widget above editor
     ctx.ui.setWidget("project-rules", (_tui: any, theme: any) => {
@@ -198,28 +204,38 @@ export default function (pi: ExtensionAPI) {
 
   // ---- /rules toggle - hide/show banner ----
   pi.registerCommand("rules-toggle", {
-    description: "Toggle the project-rules banner on/off",
-    handler: async (_args, ctx) => {
+    description: "Toggle the project-rules banner on/off. /rules-toggle [--global]",
+    handler: async (args, ctx) => {
       rescan(ctx.cwd);
       if (currentRules.length === 0) {
         ctx.ui.notify("No project rules loaded", "info");
         return;
       }
-      if (rulesVisible) {
+      const parts = args.trim().split(/\s+/);
+      const global = parts.includes("--global") || parts.includes("-g");
+      const currentlyVisible = isVisible(ctx.cwd);
+
+      if (currentlyVisible) {
         ctx.ui.setWidget("project-rules", undefined);
         ctx.ui.setStatus("project-rules", undefined);
-        rulesVisible = false;
-        configSet("project-rules.visible", false);
-        ctx.ui.notify("Rules banner hidden. /rules-toggle to show again.", "info");
+      }
+
+      if (global) {
+        configSet("project-rules.visible", !currentlyVisible);
       } else {
+        setProject(ctx.cwd, "project-rules.visible", !currentlyVisible);
+      }
+
+      if (!currentlyVisible) {
         ctx.ui.setWidget("project-rules", (_tui: any, theme: any) => {
           return new RulesBanner(currentRules.map((r) => r.name), theme);
         });
         ctx.ui.setStatus("project-rules", `[rules] ${currentRules.length} active`);
-        rulesVisible = true;
-        configSet("project-rules.visible", true);
-        ctx.ui.notify("Rules banner shown.", "info");
       }
+
+      const scope = global ? "globally" : "for this project";
+      const state = !currentlyVisible ? "shown" : "hidden";
+      ctx.ui.notify(`Rules banner ${state} ${scope}.`, "info");
     },
   });
 
@@ -233,7 +249,7 @@ export default function (pi: ExtensionAPI) {
         "info",
       );
       // Refresh banner widget (respect visibility preference)
-      if (currentRules.length > 0 && rulesVisible) {
+      if (currentRules.length > 0 && isVisible(ctx.cwd)) {
         ctx.ui.setWidget("project-rules", (_tui: any, theme: any) => {
           return new RulesBanner(currentRules.map((r) => r.name), theme);
         });
