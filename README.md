@@ -33,7 +33,6 @@ Auto-detected by Pi from your prompt.
 | `grill-me` | "roast this", "review this code" |
 | `merge-pr` | "merge PR 81" |
 | `project-onboarding` | "what does this project do" |
-| `scratchpad` | "remember this for later" |
 | `commit` | "write a commit message" |
 | `changelog` | "update changelog" |
 | `pr` | "write a PR description" |
@@ -44,7 +43,8 @@ Auto-detected by Pi from your prompt.
 | `docs-gen` | "write documentation" |
 | `dep-update` | "update dependencies" |
 | `extend-pi` | "build an extension" |
-| `initialize-project` | "initialize a project", "scaffold" |
+| `version-management` | "bump version", "release" |
+| `pi-project-setup` | "initialize a project", "scaffold", "migrate to AGENTS.md" |
 
 ### Agents
 Subagents via `subagent` tool or `/parallel` command (pi-subagents).

@@ -3,6 +3,7 @@
 ## 0.2.0 - 2026-06-28
 
 ### Added
+
 - Central config extension with project-scoped `getProject`/`setProject`
 - Guard: 4 new risk patterns (SOPS wildcard, curl|bash, git push --delete, npm publish)
 - Per-risk guard enable/disable via `/safety risk` subcommand (global + project)
@@ -17,6 +18,11 @@
 - Test suites: 17 config API tests + 26 extension logic tests + 25 memory tests
 
 ### Changed
+
+- Renamed `initialize-project` skill to `pi-project-setup` (unified greenfield + brownfield)
+- Overhauled `pr`, `readme`, and `test` skills with best-practice templates and patterns
+- Removed `scratchpad` skill (replaced by lntrx-memory)
+- Renamed `version` skill to `version-management`
 - Guard: project config now has priority over global (project > global > default)
 - Guard: `/safety on|off` supports `--global` flag, defaults to project scope
 - Lang: `/lang` supports `--global` flag, project language overrides global
@@ -25,10 +31,12 @@
 - Config file moved from extensions to root `tests/` directory
 
 ### Fixed
+
 - YAML colon in skill description broke parser
 - Em dash replaced with plain hyphen in `.npmignore`
 
 ### Removed
+
 - Memory: daily log and scratchpad (replaced by SQLite backend)
 
 ---
@@ -36,6 +44,7 @@
 ## 0.1.0 - 2026-06-26
 
 ### Added
+
 - 13 Pi extensions: config, context, fmt, footer, grill-me, guard, header, health, lang, localmodels, lsp, memory, project-rules
 - 15 auto-detect skills: grill-me, merge-pr, project-onboarding, scratchpad, commit, changelog, pr, debug, refactor, test, readme, docs-gen, dep-update, extend-pi, initialize-project
 - 5 subagents: reviewer, planner, scout, worker, oracle (via pi-subagents)

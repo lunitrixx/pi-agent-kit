@@ -15,13 +15,20 @@ Generate a user-facing changelog entry from recent git history.
 ## <version> (<YYYY-MM-DD>)
 
 ### Added
+
 - <new features>
 
 ### Changed
+
 - <behavior changes>
 
 ### Fixed
+
 - <bug fixes>
+
+### Removed
+
+- <removed features>
 ```
 
 ## Process
