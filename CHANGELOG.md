@@ -20,6 +20,8 @@
 ### Changed
 
 - Renamed `initialize-project` skill to `pi-project-setup` (unified greenfield + brownfield)
+- Overhauled `pr`, `readme`, and `test` skills with best-practice templates and patterns
+- Removed `scratchpad` skill (replaced by lntrx-memory)
 - Renamed `version` skill to `version-management`
 - Guard: project config now has priority over global (project > global > default)
 - Guard: `/safety on|off` supports `--global` flag, defaults to project scope

@@ -25,7 +25,7 @@ pi install npm:@lunitrixx/pi-agent-kit
 | `lntrx-memory` | Cross-session project memory (cerebrum, anatomy, buglog, scratchpad, daily) |
 | `lntrx-project-rules` | Inject `.pi/rules/` into system prompt + banner widget |
 
-### Skills (16)
+### Skills (15)
 Auto-detected by Pi from your prompt.
 
 | Skill | Triggers on |
@@ -33,7 +33,6 @@ Auto-detected by Pi from your prompt.
 | `grill-me` | "roast this", "review this code" |
 | `merge-pr` | "merge PR 81" |
 | `project-onboarding` | "what does this project do" |
-| `scratchpad` | "remember this for later" |
 | `commit` | "write a commit message" |
 | `changelog` | "update changelog" |
 | `pr` | "write a PR description" |
