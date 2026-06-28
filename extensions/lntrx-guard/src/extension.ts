@@ -12,32 +12,51 @@ function on(): boolean {
 }
 
 interface Risk {
+  id: string;             // kebab-case config key suffix, e.g. "force-push"
   pattern: RegExp;
   label: string;
   severity: "destructive" | "risky";
   detail?: string;
 }
 
+function riskConfigKey(id: string): string { return `${NS}.risks.${id}`; }
+
+function riskGloballyDisabled(id: string): boolean { return get(riskConfigKey(id)) === false; }
+
+function riskProjectDisabled(repoPath: string, id: string): boolean {
+  return (projectConfig(repoPath) as any)?.[riskConfigKey(id)] === false;
+}
+
+function riskEnabled(repoPath: string, id: string): boolean {
+  if (riskGloballyDisabled(id)) return false;
+  if (riskProjectDisabled(repoPath, id)) return false;
+  return true;
+}
+
 const RISKS: Risk[] = [
-  { pattern: /\brm\s+-rf?\b/,                          label: "Recursive delete",     severity: "destructive", detail: "Irreversible file deletion" },
-  { pattern: /\brm\s+.*\*/,                            label: "Wildcard delete",     severity: "destructive", detail: "Deletes everything matching" },
-  { pattern: /\bsudo\b/,                               label: "Superuser command",   severity: "risky",       detail: "Runs with root privileges" },
-  { pattern: /\bchmod\s+777\b/,                        label: "World-writable chmod",severity: "risky",       detail: "777 opens files to everyone" },
-  { pattern: /\bchown\b/,                              label: "Change ownership",    severity: "risky" },
-  { pattern: /\bgit\s+push\s+.*--force/,               label: "Force push",          severity: "destructive", detail: "Overwrites remote history" },
-  { pattern: /\bgit\s+reset\s+--hard/,                 label: "Hard reset",          severity: "destructive", detail: "Discards all uncommitted changes" },
-  { pattern: /\bgit\s+clean\b/,                        label: "Git clean",           severity: "destructive", detail: "Removes untracked files" },
-  { pattern: /\bdd\s+if=/,                             label: "Disk copy (dd)",      severity: "destructive", detail: "Can overwrite disks" },
-  { pattern: /\bdocker\s+system\s+prune/,              label: "Docker prune",        severity: "risky",       detail: "Removes all unused Docker data" },
-  { pattern: /\bdocker\s+rm\b/,                        label: "Docker remove",       severity: "risky" },
-  { pattern: /\bdrop\s+database\b/i,                   label: "Drop database",       severity: "destructive", detail: "Destroys database permanently" },
-  { pattern: /\bdrop\s+table\b/i,                      label: "Drop table",          severity: "destructive", detail: "Destroys table permanently" },
-  { pattern: /\bpip\s+uninstall\b/,                    label: "Pip uninstall",       severity: "risky" },
-  { pattern: /\bnpm\s+uninstall\b/,                    label: "npm uninstall",       severity: "risky" },
+  { id: "rm-rf",           pattern: /\brm\s+-rf?\b/,                          label: "Recursive delete",     severity: "destructive", detail: "Irreversible file deletion" },
+  { id: "rm-wildcard",     pattern: /\brm\s+.*\*/,                            label: "Wildcard delete",     severity: "destructive", detail: "Deletes everything matching" },
+  { id: "sudo",            pattern: /\bsudo\b/,                               label: "Superuser command",   severity: "risky",       detail: "Runs with root privileges" },
+  { id: "chmod-777",       pattern: /\bchmod\s+777\b/,                        label: "World-writable chmod",severity: "risky",       detail: "777 opens files to everyone" },
+  { id: "chown",           pattern: /\bchown\b/,                              label: "Change ownership",    severity: "risky" },
+  { id: "force-push",      pattern: /\bgit\s+push\s+.*--force/,               label: "Force push",          severity: "destructive", detail: "Overwrites remote history" },
+  { id: "hard-reset",      pattern: /\bgit\s+reset\s+--hard/,                 label: "Hard reset",          severity: "destructive", detail: "Discards all uncommitted changes" },
+  { id: "git-clean",       pattern: /\bgit\s+clean\b/,                        label: "Git clean",           severity: "destructive", detail: "Removes untracked files" },
+  { id: "dd",              pattern: /\bdd\s+if=/,                             label: "Disk copy (dd)",      severity: "destructive", detail: "Can overwrite disks" },
+  { id: "docker-prune",    pattern: /\bdocker\s+system\s+prune/,              label: "Docker prune",        severity: "risky",       detail: "Removes all unused Docker data" },
+  { id: "docker-rm",       pattern: /\bdocker\s+rm\b/,                        label: "Docker remove",       severity: "risky" },
+  { id: "drop-database",   pattern: /\bdrop\s+database\b/i,                   label: "Drop database",       severity: "destructive", detail: "Destroys database permanently" },
+  { id: "drop-table",      pattern: /\bdrop\s+table\b/i,                      label: "Drop table",          severity: "destructive", detail: "Destroys table permanently" },
+  { id: "pip-uninstall",   pattern: /\bpip\s+uninstall\b/,                    label: "Pip uninstall",       severity: "risky" },
+  { id: "npm-uninstall",   pattern: /\bnpm\s+uninstall\b/,                    label: "npm uninstall",       severity: "risky" },
+  { id: "sops-wildcard",   pattern: /\bsops\s+.*\*/,                           label: "SOPS wildcard decrypt",severity: "destructive", detail: "Decrypts all matching secret files at once" },
+  { id: "pipe-shell",      pattern: /\b(curl|wget)\s+.*\|.*\b(bash|sh)\b/, label: "Pipe to shell",        severity: "destructive", detail: "Executes remote script directly — supply-chain risk" },
+  { id: "push-delete",     pattern: /\bgit\s+push\s+.*--delete\b/,           label: "Git push --delete",    severity: "destructive", detail: "Deletes remote branch permanently" },
+  { id: "package-publish", pattern: /\b(npm|yarn)\s+publish\b/,              label: "Package publish",      severity: "risky",       detail: "Publishes to registry — accidental releases are hard to undo" },
 ];
 
-function findRisk(cmd: string): Risk | undefined {
-  return RISKS.find((r) => r.pattern.test(cmd));
+function findRisk(cmd: string, repoPath: string): Risk | undefined {
+  return RISKS.find((r) => r.pattern.test(cmd) && riskEnabled(repoPath, r.id));
 }
 
 interface SecretPattern { name: string; pattern: RegExp; }
@@ -257,12 +276,77 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("safety", {
-    description: "Toggle safety guard. /safety on | off | status",
+    description: "Manage safety guard. /safety on|off|status | /safety risk enable|disable|list [--global] [<risk-id>]",
+    getArgumentCompletions: (prefix) => {
+      const top = ["on", "off", "status", "risk"];
+      const match = top.filter((s) => s.startsWith(prefix));
+      return match.length > 0 ? match.map((s) => ({ value: s, label: s })) : null;
+    },
     handler: async (args, ctx) => {
-      const v = args.trim().toLowerCase();
-      if (v === "off") { set(NS, false); ctx.ui.notify("Safety guard OFF — dangerous commands run unchecked.", "warning"); }
-      else if (v === "on") { set(NS, true); ctx.ui.notify("Safety guard ON.", "success"); }
-      else { ctx.ui.notify(`Safety guard: ${on() ? "ON" : "OFF"}. /safety on|off`, "info"); }
+      const parts = args.trim().split(/\s+/);
+      const sub = parts[0];
+      const global = parts.includes("--global") || parts.includes("-g");
+
+      // ---- risk subcommand ----
+      if (sub === "risk") {
+        const action = parts[1]; // enable | disable | list
+        const idArg = parts.filter((p) => !["risk","enable","disable","list","status","--global","-g"].includes(p))[0];
+        const targets = idArg ? RISKS.filter((r) => r.id === idArg) : RISKS;
+
+        if (action === "disable") {
+          if (targets.length === 0) { ctx.ui.notify(`Unknown risk: ${idArg}`, "error"); return; }
+          for (const r of targets) {
+            if (global) {
+              set(riskConfigKey(r.id), false);
+            } else {
+              const cfg = projectConfig(ctx.cwd);
+              (cfg as any)[riskConfigKey(r.id)] = false;
+              writeProjectConfig(ctx.cwd, cfg);
+            }
+          }
+          const scope = global ? "globally" : "for this project";
+          const names = targets.map((r) => r.id).join(", ");
+          ctx.ui.notify(`Risk(s) disabled ${scope}: ${names}. /safety risk enable ${idArg || "<id>"} to undo.`, "warning");
+          return;
+        }
+
+        if (action === "enable") {
+          if (targets.length === 0) { ctx.ui.notify(`Unknown risk: ${idArg}`, "error"); return; }
+          for (const r of targets) {
+            if (global) {
+              set(riskConfigKey(r.id), undefined);
+            } else {
+              const cfg = projectConfig(ctx.cwd);
+              delete (cfg as any)[riskConfigKey(r.id)];
+              writeProjectConfig(ctx.cwd, cfg);
+            }
+          }
+          const scope = global ? "globally" : "for this project";
+          const names = targets.map((r) => r.id).join(", ");
+          ctx.ui.notify(`Risk(s) enabled ${scope}: ${names}.`, "success");
+          return;
+        }
+
+        // Default: list
+        const lines: string[] = [`Safety risks (${on() ? "guard ON" : "guard OFF"}):`, ""];
+        for (const r of RISKS) {
+          const gOff = riskGloballyDisabled(r.id);
+          const pOff = riskProjectDisabled(ctx.cwd, r.id);
+          let state: string;
+          if (gOff) state = "OFF (global)";
+          else if (pOff) state = "OFF (project)";
+          else state = "ON";
+          const icon = r.severity === "destructive" ? "🔥" : "⚠️";
+          lines.push(`  ${icon} ${r.id.padEnd(18)} ${state.padEnd(16)} ${r.label}`);
+        }
+        ctx.ui.notify(lines.join("\n"), "info");
+        return;
+      }
+
+      // ---- top-level on/off ----
+      if (sub === "off") { set(NS, false); ctx.ui.notify("Safety guard OFF — dangerous commands run unchecked.", "warning"); }
+      else if (sub === "on") { set(NS, true); ctx.ui.notify("Safety guard ON.", "success"); }
+      else { ctx.ui.notify(`Safety guard: ${on() ? "ON" : "OFF"}. /safety on|off | /safety risk list`, "info"); }
     },
   });
 
@@ -304,7 +388,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
-    const risk = findRisk(cmd);
+    const risk = findRisk(cmd, ctx.cwd);
     if (!risk) return;
 
     const icon = risk.severity === "destructive" ? "🔥" : "⚠️";
