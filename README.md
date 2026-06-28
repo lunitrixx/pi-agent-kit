@@ -44,7 +44,7 @@ Auto-detected by Pi from your prompt.
 | `docs-gen` | "write documentation" |
 | `dep-update` | "update dependencies" |
 | `extend-pi` | "build an extension" |
-| `initialize-project` | "initialize a project", "scaffold" |
+| `pi-project-setup` | "initialize a project", "scaffold", "migrate to AGENTS.md" |
 
 ### Agents
 Subagents via `subagent` tool or `/parallel` command (pi-subagents).

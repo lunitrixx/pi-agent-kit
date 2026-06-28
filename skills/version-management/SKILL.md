@@ -18,14 +18,13 @@ Manage semantic versioning and changelogs for this project.
 
 ## Changelog Sections
 
-- `Added` - new features
-- `Changed` - changes in existing functionality
-- `Deprecated` - soon-to-be removed features
-- `Removed` - removed features
-- `Fixed` - bug fixes
-- `Security` - vulnerability fixes
-
-Keep an `[Unreleased]` section at the top.
+- `## Unreleased` — pending changes (top of file, replaced on version bump)
+- `Added` — new features
+- `Changed` — changes in existing functionality
+- `Deprecated` — soon-to-be removed features
+- `Removed` — removed features
+- `Fixed` — bug fixes
+- `Security` — vulnerability fixes
 
 ## Workflow
 
@@ -33,10 +32,11 @@ Keep an `[Unreleased]` section at the top.
 
 1. Read `CHANGELOG.md` and `package.json`.
 2. Determine bump type (major/minor/patch) from changes since last release.
-3. Update `package.json` version.
-4. Move `[Unreleased]` section to a new version section with date.
-5. Commit: `chore(release): bump to vX.Y.Z`.
-6. Tag with annotation.
+3. If a `## Unreleased` section exists, replace `## Unreleased` with `## <version> (<YYYY-MM-DD>)`. If not, insert the new version heading above the topmost release.
+4. Add a fresh empty `## Unreleased` section above the new version.
+5. Update `package.json` version.
+6. Commit: `chore(release): bump to vX.Y.Z`.
+7. Tag with annotation.
 
 ### Write changelog from commits
 
