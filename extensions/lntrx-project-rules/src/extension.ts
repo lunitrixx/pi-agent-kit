@@ -144,7 +144,7 @@ export default function (pi: ExtensionAPI) {
 
     const rulesBlock = [
       "<project_rules>",
-      "The following rules from `.pi/rules/` and `.claude/rules/` always apply:",
+      "The following rules are mandatory and always apply:",
       "",
       sections.join("\n\n"),
       "</project_rules>",
