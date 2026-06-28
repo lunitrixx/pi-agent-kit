@@ -2,14 +2,22 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-06-28
+
+### Added
+
+- `/memory list [N]` (alias `ls`, `recent`) shows recent entries with IDs
+- `/memory forget all` deletes all entries for current project (`forget all bug` for bugs)
+- Anatomy scanner respects `.scanignore` (priority) or `.gitignore` (fallback) patterns
+
 ### Changed
 
-- Memory anatomy scanner respects `.scanignore` (priority) or `.gitignore` (fallback) patterns instead of blanket-skipping all dotfiles
-- Split memory extension into three modules: `db.ts` (SQLite/schema/types), `scanner.ts` (anatomy scanner), `extension.ts` (tools/commands/hooks) - no file exceeds 1000 lines
+- Memory extension split into 6 modules: `db`, `scanner`, `text`, `tools`, `commands`, `extension` (max 272 lines, was 1132)
 
 ### Fixed
 
-- Memory extension now runs `PRAGMA wal_checkpoint(TRUNCATE)` after every write, merging WAL back into the main database and preventing persistent `.db-shm`/`.db-wal` files
+- SQLite WAL now truncated after every write via `PRAGMA wal_checkpoint(TRUNCATE)`, preventing persistent `.db-shm`/`.db-wal` files
+- Scanner skips SQLite WAL/SHM artifacts (`.db-shm`, `.db-wal`, `.db-wal2`)
 
 ## 0.2.0 - 2026-06-28
 
