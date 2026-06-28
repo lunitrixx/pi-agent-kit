@@ -5,6 +5,7 @@
 ### Changed
 
 - Memory anatomy scanner respects `.scanignore` (priority) or `.gitignore` (fallback) patterns instead of blanket-skipping all dotfiles
+- Split memory extension into three modules: `db.ts` (SQLite/schema/types), `scanner.ts` (anatomy scanner), `extension.ts` (tools/commands/hooks) - no file exceeds 1000 lines
 
 ### Fixed
 
