@@ -1,6 +1,6 @@
 ---
 name: config-architecture
-description: Projekt-spezifische Config-Architektur: lntrx-config Extension, Scopes, Keys, Tests
+description: "Projekt-spezifische Config-Architektur: lntrx-config Extension, Scopes, Keys, Tests"
 ---
 
 # Config-Architektur
