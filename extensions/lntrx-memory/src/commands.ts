@@ -30,7 +30,7 @@ export interface CmdCtx {
 
 export function registerCommands(pi: ExtensionAPI, ctx: CmdCtx) {
   pi.registerCommand("memory", {
-    description: "Memory: list|search|learn|forget|scan|bug|bugs|health [<args>]",
+    description: "Memory: list|search|learn|forget|forget all|scan|bug|bugs|health [<args>]",
     handler: async (args, c) => {
       const parts = args.trim().split(/\s+/);
       const sub = parts[0];
@@ -81,9 +81,19 @@ export function registerCommands(pi: ExtensionAPI, ctx: CmdCtx) {
 
       // ---- forget ----
       if (sub === "forget") {
+        // /memory forget all
+        if (parts[1] === "all") {
+          const d = ctx.ensureDb();
+          if (!d) { c.ui.notify("DB unavailable.", "error"); return; }
+          const table = parts[2] === "bug" ? "bugs" : "entries";
+          const res = d.prepare(`DELETE FROM ${table} WHERE project = ?`).run(ctx.currentProject);
+          if (res.changes > 0) ctx.checkpoint();
+          c.ui.notify(`${res.changes} ${table === "bugs" ? "bugs" : "entries"} deleted.`, "success");
+          return;
+        }
         const id = parseInt(parts[1], 10);
         const table = parts[2] === "bug" ? "bugs" : "entries";
-        if (isNaN(id)) { c.ui.notify("/memory forget <id> [bug]", "warning"); return; }
+        if (isNaN(id)) { c.ui.notify("/memory forget <id|all> [bug]", "warning"); return; }
         const d = ctx.ensureDb();
         if (!d) { c.ui.notify("DB unavailable.", "error"); return; }
         const res = d.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
@@ -163,7 +173,7 @@ export function registerCommands(pi: ExtensionAPI, ctx: CmdCtx) {
         return;
       }
 
-      c.ui.notify("/memory list|search|learn|forget|scan|bug add|fix|close|delete|bugs|health", "info");
+      c.ui.notify("/memory list|search|learn|forget <id|all>|scan|bug add|fix|close|delete|bugs|health", "info");
     },
   });
 }
