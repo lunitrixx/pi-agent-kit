@@ -22,7 +22,6 @@ Thumbs.db
 /.idea
 /.vscode/*
 !/.vscode/settings.json
-.pi/memory/
 
 # SQLite WAL artifacts
 *.db-shm
