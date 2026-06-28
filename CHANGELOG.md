@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Memory anatomy scanner respects `.scanignore` (priority) or `.gitignore` (fallback) patterns instead of blanket-skipping all dotfiles
+
+### Fixed
+
+- Memory extension now runs `PRAGMA wal_checkpoint(TRUNCATE)` after every write, merging WAL back into the main database and preventing persistent `.db-shm`/`.db-wal` files
+
 ## 0.2.0 - 2026-06-28
 
 ### Added
