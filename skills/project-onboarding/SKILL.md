@@ -31,13 +31,9 @@ package.json). Always report findings back to the user in a structured summary.
    `.github/copilot-instructions.md`. These contain project-specific conventions
    that the agent must follow. Always read them fully.
 
-3. **Check project memory** - If `lntrx-memory` is active, run `/memory scan` to
+3. **Check project memory** — If `lntrx-memory` is active, run `/memory scan` to
    generate the project file map (anatomy). Then search the cerebrum for prior
    knowledge about this project, and the buglog for known issues.
-
-4. **Check for shared memory** - Look for `.wolf/cerebrum.md`, `.wolf/anatomy.md`,
-   `.wolf/buglog.json` (OpenWolf). These contain learned conventions and known
-   issues from previous sessions.
 
 ### Phase 2: Structure & Tooling
 
@@ -125,9 +121,6 @@ After completing all phases, present a structured summary:
 - If a CLAUDE.md already contains thorough project documentation, keep Phase 1-3
   lighter and focus on what CLAUDE.md doesn't cover (recent git activity, actual
   file tree, dependency freshness).
-- If the project uses OpenWolf (`@.wolf/OPENWOLF.md`), always read `.wolf/anatomy.md`
-  for the pre-built file map and `.wolf/cerebrum.md` for learned conventions - this
-  saves significant time.
 - When the project has no documentation at all, invest more time in Phase 2-3 to
   compensate.
 - Never modify files during onboarding. This is read-only analysis.
