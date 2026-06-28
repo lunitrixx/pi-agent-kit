@@ -23,3 +23,8 @@ Thumbs.db
 /.vscode/*
 !/.vscode/settings.json
 .pi/memory/
+
+# SQLite WAL artifacts
+*.db-shm
+*.db-wal
+*.db-wal2

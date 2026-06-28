@@ -22,6 +22,7 @@ import {
   detectProject,
   getLastAssistantText,
   getText,
+  loadIgnorePatterns,
   openDb,
   parseRememberBlocks,
   toFtsQuery,
@@ -248,6 +249,79 @@ test("defaultDbPath falls back to ~/.pi/memory.db", () => {
   finally {
     if (prevDb === undefined) delete process.env.LNTRX_MEMORY_DB; else process.env.LNTRX_MEMORY_DB = prevDb;
     if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// loadIgnorePatterns
+// ---------------------------------------------------------------------------
+
+console.log("\n--- ignore patterns ---");
+
+test("loadIgnorePatterns returns empty when no ignore file", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lntrx-ig-"));
+  try {
+    const patterns = loadIgnorePatterns(dir);
+    assert.deepEqual(patterns, []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadIgnorePatterns prefers .scanignore over .gitignore", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lntrx-ig-"));
+  try {
+    fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules/\ndist/\n");
+    fs.writeFileSync(path.join(dir, ".scanignore"), "*.log\n.env\n");
+    const patterns = loadIgnorePatterns(dir);
+    assert.equal(patterns.length, 2);
+    assert.equal(patterns[0].pattern, "*.log");
+    assert.equal(patterns[1].pattern, ".env");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadIgnorePatterns falls back to .gitignore when no .scanignore", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lntrx-ig-"));
+  try {
+    fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules/\ndist/\n*.log\n");
+    const patterns = loadIgnorePatterns(dir);
+    assert.equal(patterns.length, 3);
+    assert.equal(patterns[0].pattern, "node_modules/");
+    assert.equal(patterns[1].pattern, "dist/");
+    assert.equal(patterns[2].pattern, "*.log");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadIgnorePatterns skips comments, blanks, and negations", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lntrx-ig-"));
+  try {
+    fs.writeFileSync(path.join(dir, ".gitignore"), "# comment\n\n*.log\n!important.log\n\n.env\n");
+    const patterns = loadIgnorePatterns(dir);
+    assert.equal(patterns.length, 2);
+    assert.equal(patterns[0].pattern, "*.log");
+    assert.equal(patterns[1].pattern, ".env");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("gitignore patterns: dir-only (*/ ) and anchored (/...) ", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lntrx-ig-"));
+  try {
+    fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules/\n/.idea\n");
+    const patterns = loadIgnorePatterns(dir);
+    assert.equal(patterns.length, 2);
+    // node_modules/ is dir-only
+    assert.equal(patterns[0].dirOnly, true);
+    // /idea is anchored - should only match at root
+    assert.ok(patterns[1].regex.test(".idea"));
+    assert.ok(!patterns[1].regex.test("sub/.idea"));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

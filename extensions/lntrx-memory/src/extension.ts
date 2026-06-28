@@ -327,23 +327,142 @@ const CODE_EXTS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".c", ".h", ".cpp",
   ".lua", ".md", ".json", ".yaml", ".toml",
 ]);
+// Hardcoded baseline - always skipped regardless of ignore file
 const SCAN_IGNORE = new Set([
   ".git", "node_modules", ".pi", "dist", "build", "__pycache__", ".next", "target",
 ]);
 
+// SQLite WAL/SHM files that sit next to any .db file
+const DB_ARTIFACT_EXTS = new Set([".db-shm", ".db-wal", ".db-wal2"]);
+
+// ---------------------------------------------------------------------------
+// Gitignore-style pattern matching for scan
+// ---------------------------------------------------------------------------
+
+interface IgnoreRule {
+  pattern: string;
+  regex: RegExp;
+  dirOnly: boolean;
+}
+
+/**
+ * Convert a gitignore glob pattern to a regex string.
+ * Handles *, **, ?, and character classes.
+ */
+function globToRegex(pattern: string): string {
+  let re = "";
+  let i = 0;
+  while (i < pattern.length) {
+    const c = pattern[i];
+    if (c === "*" && pattern[i + 1] === "*") {
+      if (pattern[i + 2] === "/") {
+        // **/ matches zero or more directories
+        re += "(?:.+/)?";
+        i += 3;
+      } else if (i + 2 >= pattern.length) {
+        // Trailing ** matches everything
+        re += ".*";
+        i += 2;
+      } else {
+        // /**/ in the middle matches at least one segment
+        re += ".+";
+        i += 2;
+      }
+      continue;
+    }
+    if (c === "*") { re += "[^/]*"; i++; continue; }
+    if (c === "?") { re += "[^/]"; i++; continue; }
+    if (c === "[") {
+      const end = pattern.indexOf("]", i);
+      if (end === -1) { re += "\\["; i++; continue; }
+      re += pattern.slice(i, end + 1);
+      i = end + 1;
+      continue;
+    }
+    // Escape regex specials
+    if (".+^${}()|\\".includes(c)) re += "\\" + c;
+    else re += c;
+    i++;
+  }
+  return re;
+}
+
+function parseIgnorePattern(line: string): IgnoreRule {
+  let p = line.trim();
+  let dirOnly = false;
+  let anchored = false;
+
+  // Trailing / means directory only
+  if (p.endsWith("/")) { dirOnly = true; p = p.slice(0, -1); }
+
+  // Leading / means anchored to project root
+  if (p.startsWith("/")) { anchored = true; p = p.slice(1); }
+
+  // Pattern without / is unanchored and matches at any level
+  if (!anchored && !p.includes("/")) p = "**/" + p;
+
+  return {
+    pattern: line.trim(),
+    regex: new RegExp(`^${globToRegex(p)}${dirOnly ? "(?:/.*)?$" : "$"}`),
+    dirOnly,
+  };
+}
+
+/**
+ * Load ignore patterns from .scanignore (preferred) or .gitignore (fallback).
+ * Returns empty array if neither file exists or can't be read.
+ */
+export function loadIgnorePatterns(root: string): IgnoreRule[] {
+  let ignorePath = path.join(root, ".scanignore");
+  if (!fs.existsSync(ignorePath)) ignorePath = path.join(root, ".gitignore");
+
+  const patterns: IgnoreRule[] = [];
+  try {
+    const content = fs.readFileSync(ignorePath, "utf-8");
+    for (let l of content.split("\n")) {
+      l = l.trim();
+      if (!l || l.startsWith("#")) continue;
+      if (l.startsWith("!")) continue; // negations not supported
+      patterns.push(parseIgnorePattern(l));
+    }
+  } catch { /* no ignore file */ }
+  return patterns;
+}
+
+function isIgnored(relPath: string, isDir: boolean, patterns: IgnoreRule[]): boolean {
+  const bare = isDir ? relPath.replace(/\/$/, "") : relPath;
+  for (const rule of patterns) {
+    if (!isDir && rule.dirOnly) continue;
+    if (rule.regex.test(relPath)) return true;
+    // Non-dir-only patterns also match directory basenames without trailing /
+    if (isDir && !rule.dirOnly && rule.regex.test(bare)) return true;
+  }
+  return false;
+}
+
 function scanAnatomy(root: string): { files: number; tokens: number; byExt: Record<string, string[]> } {
+  const ignorePatterns = loadIgnorePatterns(root);
   const entries: { path: string; ext: string; tokens: number }[] = [];
+
   function walk(dir: string) {
     try {
       for (const f of fs.readdirSync(dir)) {
-        if (SCAN_IGNORE.has(f) || f.startsWith(".")) continue;
+        if (SCAN_IGNORE.has(f)) continue;
+        // Skip SQLite WAL/SHM artifacts next to .db files
+        if (DB_ARTIFACT_EXTS.has(path.extname(f).toLowerCase())) continue;
         const full = path.join(dir, f);
+        const rel = path.relative(root, full);
         const st = fs.statSync(full);
-        if (st.isDirectory()) { walk(full); continue; }
+        if (st.isDirectory()) {
+          if (isIgnored(rel + "/", true, ignorePatterns)) continue;
+          walk(full);
+          continue;
+        }
+        if (isIgnored(rel, false, ignorePatterns)) continue;
         const ext = path.extname(f).toLowerCase();
         if (!CODE_EXTS.has(ext)) continue;
         entries.push({
-          path: path.relative(root, full),
+          path: rel,
           ext,
           tokens: Math.max(1, Math.ceil(st.size / 4)),
         });
@@ -405,6 +524,17 @@ export default function memoryExtension(pi: ExtensionAPI) {
       sqliteLoadError = (err as Error).message;
       return null;
     }
+  }
+
+  /** Merge WAL back into the main database and truncate the WAL file. */
+  function checkpoint(): void {
+    const d = ensureDb();
+    if (!d) return;
+    try {
+      // TRUNCATE checkpoints all pages and resets WAL to zero bytes.
+      // Safe with synchronous node:sqlite - no concurrent connections.
+      d.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch { /* checkpoint is best-effort */ }
   }
 
   function scopeProject(scope: "project" | "global"): string {
@@ -488,6 +618,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
         "INSERT INTO entries(created, scope, project, category, headline, detail, labels) VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
       .run(entry.created, entry.scope, entry.project, entry.category, entry.headline, entry.detail, entry.labels);
+    checkpoint();
     return { id: Number(res.lastInsertRowid), ...entry };
   }
 
@@ -495,6 +626,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
     const d = ensureDb();
     if (!d) return false;
     const res = d.prepare("DELETE FROM entries WHERE id = ?").run(id);
+    if (res.changes > 0) checkpoint();
     return res.changes > 0;
   }
 
@@ -506,6 +638,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
     const res = d
       .prepare("INSERT INTO bugs(created, project, symptom, solution) VALUES (unixepoch(), ?, ?, ?)")
       .run(currentProject, symptom.slice(0, 2000), solution.slice(0, 2000));
+    checkpoint();
     return {
       id: Number(res.lastInsertRowid),
       created: Math.floor(Date.now() / 1000),
@@ -620,6 +753,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
         }
         vals.push(params.id);
         const res = d.prepare(`UPDATE entries SET ${changes.join(", ")} WHERE id = ?`).run(...vals);
+        if (res.changes > 0) checkpoint();
         return {
           content: [{ type: "text", text: res.changes > 0 ? `Entry #${params.id} updated.` : `Entry #${params.id} not found.` }],
           details: { ok: res.changes > 0 },
@@ -661,12 +795,14 @@ export default function memoryExtension(pi: ExtensionAPI) {
     const result = scanAnatomy(currentProject);
     const md = anatomyToMarkdown(currentProject, result);
     d.prepare("DELETE FROM entries WHERE category = 'anatomy' AND project = ?").run(currentProject);
-    return save({
+    const saved = save({
       category: "anatomy",
       headline: `Project anatomy: ${result.files} files, ${result.tokens.toLocaleString()} tokens`,
       detail: md.slice(0, 8000),
       scope: "project",
     });
+    checkpoint();
+    return saved;
   }
 
   pi.registerTool({
@@ -691,6 +827,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
       const table = params.table || "entries";
       const res = d.prepare(`DELETE FROM ${table} WHERE id = ?`).run(params.id);
       const ok = res.changes > 0;
+      if (ok) checkpoint();
       return {
         content: [{ type: "text", text: ok ? `${table === "entries" ? "Entry" : "Bug"} #${params.id} deleted.` : `#${params.id} not found in ${table}.` }],
         details: { ok },
@@ -750,6 +887,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
         }
         vals.push(params.id);
         d.prepare(`UPDATE bugs SET ${changes.join(", ")} WHERE id = ?`).run(...vals);
+        checkpoint();
         return {
           content: [{ type: "text", text: `Bug #${params.id} updated.` }],
           details: { ok: true },
@@ -815,6 +953,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
         if (!d) { ctx.ui.notify("DB unavailable.", "error"); return; }
         const res = d.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
         const ok = res.changes > 0;
+        if (ok) checkpoint();
         ctx.ui.notify(ok ? `${table === "bugs" ? "Bug" : "Entry"} #${id} deleted.` : `#${id} not found.`, ok ? "success" : "error");
         return;
       }
@@ -827,6 +966,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
         const md = anatomyToMarkdown(currentProject, result);
         d.prepare("DELETE FROM entries WHERE category = 'anatomy' AND project = ?").run(currentProject);
         save({ category: "anatomy", headline: `Anatomy: ${result.files} files`, detail: md, scope: "project" });
+        checkpoint();
         ctx.ui.notify(`Anatomy: ${result.files} files, ${result.tokens.toLocaleString()} tokens.`, "success");
         return;
       }
@@ -857,6 +997,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
           const d = ensureDb();
           if (!d) { ctx.ui.notify("DB unavailable.", "error"); return; }
           d.prepare("UPDATE bugs SET state = 'fixed', solution = ? WHERE id = ?").run(fix || "Fixed", id);
+          checkpoint();
           ctx.ui.notify(`Bug #${id} marked fixed.`, "success");
           return;
         }
@@ -866,6 +1007,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
           const d = ensureDb();
           if (!d) { ctx.ui.notify("DB unavailable.", "error"); return; }
           d.prepare("UPDATE bugs SET state = 'fixed' WHERE id = ?").run(id);
+          checkpoint();
           ctx.ui.notify(`Bug #${id} closed.`, "success");
           return;
         }
@@ -875,6 +1017,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
           const d = ensureDb();
           if (!d) { ctx.ui.notify("DB unavailable.", "error"); return; }
           const res = d.prepare("DELETE FROM bugs WHERE id = ?").run(id);
+          if (res.changes > 0) checkpoint();
           ctx.ui.notify(res.changes > 0 ? `Bug #${id} deleted.` : `#${id} not found.`, res.changes > 0 ? "success" : "error");
           return;
         }
