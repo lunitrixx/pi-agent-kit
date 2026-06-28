@@ -1,5 +1,5 @@
 ---
-name: version
+name: version-management
 description: "Bump version, write changelog entries, and create git tags following Keep a Changelog + SemVer"
 ---
 
