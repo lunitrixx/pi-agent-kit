@@ -1,0 +1,11 @@
+# Project-local agent state — never publish
+.pi/skills/
+.pi/settings.json
+.pi/pi-agent-kit.json
+.pi/memory/
+
+# Already in .gitignore but belt-and-suspenders
+node_modules/
+dist/
+build/
+*.log
