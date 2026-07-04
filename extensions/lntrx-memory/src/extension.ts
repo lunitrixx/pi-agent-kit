@@ -1,180 +1,76 @@
 /**
- * lntrx-memory - cross-session memory for pi with SQLite + FTS5.
+ * lntrx-memory v2 - file-based cross-session memory for pi
  *
- * Core logic: CRUD, checkpoint, hooks. Tools in tools.ts, commands in commands.ts.
+ * Markdown files with YAML frontmatter. No database.
+ * Core logic: store, search, index, staleness.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
+import { detectProject, projectMemoryDir, globalMemoryDir, resolveDirs, ensureDirs } from "./paths.js";
 import {
-  defaultDbPath,
-  detectProject,
-  GLOBAL_SCOPE,
-  openDb,
-  DatabaseSync,
-  sqliteLoadError,
-} from "./db.js";
-import type { SqliteDB, Entry, Bug } from "./db.js";
+  listMemories,
+  readMemory,
+  saveMemory,
+  updateMemory,
+  deleteMemory,
+  searchMemories,
+  readAnatomy,
+  writeAnatomy,
+} from "./store.js";
+import type { MemoryFile, MemoryFrontmatter } from "./frontmatter.js";
 import { scanAnatomy, anatomyToMarkdown } from "./scanner.js";
-import {
-  getLastAssistantText,
-  toFtsQuery,
-  formatEntries,
-  parseRememberBlocks,
-  getLastAssistantTextBuffer,
-  setLastAssistantTextBuffer,
-  isCorrection,
-} from "./text.js";
-import { registerTools } from "./tools.js";
-import { registerCommands } from "./commands.js";
-
-// Re-export for backward compat (tests import from extension.ts)
-export { defaultDbPath, detectProject, GLOBAL_SCOPE, openDb, DatabaseSync, sqliteLoadError } from "./db.js";
-export type { SqliteDB, Entry, Bug } from "./db.js";
-export { loadIgnorePatterns, scanAnatomy, anatomyToMarkdown } from "./scanner.js";
-export { getText, getLastAssistantText, toFtsQuery, parseRememberBlocks } from "./text.js";
+import { generateIndex, writeIndex, loadHotContext } from "./index.js";
+import { freshnessWarning, formatStalenessReport } from "./stale.js";
 
 // ---------------------------------------------------------------------------
 // Extension
 // ---------------------------------------------------------------------------
 
 const TOOL_GUIDANCE = [
-  "Local memory (lntrx-memory) is available for cross-session recall.",
-  "Use lntrx_memory_search to look up prior decisions, conventions, bugs, and preferences.",
-  "Use lntrx_memory_learn (or wrap durable facts in <remember>...</remember> in your reply) to persist them.",
-  "By default memories are scoped to the current project; pass scope:\"global\" for cross-project notes.",
-].join(" ");
+  "## lntrx-memory",
+  "",
+  "You have persistent file-based memory. Two scopes:",
+  "- **Project**: `<project>/.pi/memory/` — codebase-specific (decisions, bugs, facts)",
+  "- **Global**: `~/.pi/memory/` — cross-project (preferences, conventions about YOU)",
+  "",
+  "### Reading",
+  "- `lntrx_memory_search` tool finds relevant memories.",
+  "- `INDEX.md` (first 200 lines) is shown above as hot context.",
+  "- Anatomy is shown at session start.",
+  "",
+  "### Writing (project scope by default)",
+  "- Write directly to `.pi/memory/<category>/` as markdown with YAML frontmatter:",
+  "  ```yaml",
+  "  ---",
+  "  created: 2026-07-04T12:00:00Z",
+  "  category: decision|fact|bug|convention|correction|preference",
+  "  source_refs:            # optional — files this memory references",
+  "    - path/to/file.ts",
+  "  ---",
+  "  # Title",
+  "  Body text.",
+  "  ```",
+  "- Or use `lntrx_memory_learn` convenience tool.",
+  "- **Global scope**: Only when explicitly asked or when it's about YOU (language, style).",
+  "  Write to `~/.pi/memory/` instead.",
+  "",
+  "### Cleanup",
+  "- Run `/memory cleanup` to see broken (source deleted) and aging (>90d) entries.",
+  "- **Never delete without asking.** Show the list and ask: 'Soll ich diese Einträge löschen?'",
+  "- After user confirms, use `lntrx_memory_forget` or delete the files directly.",
+  "- Merge duplicates. Run `/memory index` to regenerate INDEX.md.",
+].join("\n");
 
 export default function memoryExtension(pi: ExtensionAPI) {
-  const dbPath = defaultDbPath();
-  let db: SqliteDB | null = null;
   let currentProject = detectProject(process.cwd());
+  let projectDir = projectMemoryDir(currentProject);
+  let globalDir = globalMemoryDir();
 
-  function ensureDb(): SqliteDB | null {
-    if (db) return db;
-    if (!DatabaseSync) return null;
-    try {
-      db = openDb(dbPath);
-      return db;
-    } catch (err) {
-      sqliteLoadError = (err as Error).message;
-      return null;
-    }
+  function getDirs(scope: "project" | "global" | "all"): string[] {
+    return resolveDirs(currentProject, scope);
   }
-
-  function checkpoint(): void {
-    const d = ensureDb();
-    if (!d) return;
-    try { d.exec("PRAGMA wal_checkpoint(TRUNCATE)"); } catch { /* best-effort */ }
-  }
-
-  function scopeProject(scope: "project" | "global"): string {
-    return scope === "global" ? GLOBAL_SCOPE : currentProject;
-  }
-
-  // ---- CRUD ----
-
-  function search(query: string, limit: number, scope: "project" | "global" | "all"): Entry[] {
-    const d = ensureDb();
-    if (!d) return [];
-    const fts = toFtsQuery(query);
-    const scopeFilter =
-      scope === "all" ? ""
-      : scope === "global" ? "AND e.scope = 'global'"
-      : "AND (e.project = ? OR e.scope = 'global')";
-    const params: unknown[] = [];
-    let sql: string;
-    if (fts) {
-      sql = `SELECT e.id, e.created, e.scope, e.project, e.category, e.headline, e.detail, e.labels
-        FROM entries_idx f JOIN entries e ON e.id = f.rowid
-        WHERE entries_idx MATCH ? ${scopeFilter}
-        ORDER BY rank, e.created DESC LIMIT ?`;
-      params.push(fts);
-    } else {
-      sql = `SELECT id, created, scope, project, category, headline, detail, labels
-        FROM entries e WHERE 1=1 ${scopeFilter}
-        ORDER BY created DESC LIMIT ?`;
-    }
-    if (scope !== "all") params.push(currentProject);
-    params.push(limit);
-    try { return d.prepare(sql).all(...params) as Entry[]; } catch {
-      if (!fts) return [];
-      try {
-        const fb: unknown[] = [];
-        if (scope !== "all") fb.push(currentProject);
-        fb.push(limit);
-        return d.prepare(`SELECT id, created, scope, project, category, headline, detail, labels FROM entries e WHERE 1=1 ${scopeFilter} ORDER BY created DESC LIMIT ?`).all(...fb) as Entry[];
-      } catch { return []; }
-    }
-  }
-
-  function save(args: {
-    headline: string; detail?: string; category?: string;
-    labels?: string; scope?: "project" | "global";
-  }): Entry | null {
-    const d = ensureDb();
-    if (!d) return null;
-    const entry = {
-      created: Math.floor(Date.now() / 1000),
-      scope: args.scope || "project",
-      project: scopeProject(args.scope || "project"),
-      category: args.category || "note",
-      headline: args.headline.slice(0, 500),
-      detail: (args.detail || "").slice(0, 8000),
-      labels: args.labels || "",
-    };
-    const res = d.prepare("INSERT INTO entries(created, scope, project, category, headline, detail, labels) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .run(entry.created, entry.scope, entry.project, entry.category, entry.headline, entry.detail, entry.labels);
-    checkpoint();
-    return { id: Number(res.lastInsertRowid), ...entry };
-  }
-
-  function saveBug(symptom: string, solution: string): Bug | null {
-    const d = ensureDb();
-    if (!d) return null;
-    const res = d.prepare("INSERT INTO bugs(created, project, symptom, solution) VALUES (unixepoch(), ?, ?, ?)")
-      .run(currentProject, symptom.slice(0, 2000), solution.slice(0, 2000));
-    checkpoint();
-    return {
-      id: Number(res.lastInsertRowid),
-      created: Math.floor(Date.now() / 1000),
-      project: currentProject, symptom, solution, state: "open",
-    };
-  }
-
-  function listBugs(project: string): Bug[] {
-    const d = ensureDb();
-    if (!d) return [];
-    return d.prepare("SELECT id, created, project, symptom, solution, state FROM bugs WHERE project = ? ORDER BY created DESC LIMIT 20").all(project) as Bug[];
-  }
-
-  function getLatestAnatomy(): Entry | null {
-    const d = ensureDb();
-    if (!d) return null;
-    return (d.prepare("SELECT id, created, scope, project, category, headline, detail, labels FROM entries WHERE category = 'anatomy' AND project = ? ORDER BY created DESC LIMIT 1").get(currentProject) as Entry | undefined) || null;
-  }
-
-  // -------------------------------------------------------------------------
-  // Wire up tools & commands
-  // -------------------------------------------------------------------------
-
-  const ctx = {
-    ensureDb,
-    checkpoint,
-    scopeProject,
-    get currentProject() { return currentProject; },
-    search,
-    save,
-    saveBug,
-    listBugs,
-    scanAnatomy,
-    anatomyToMarkdown,
-    dbPath,
-    DatabaseSync,
-    sqliteLoadError,
-  };
-
-  registerTools(pi, ctx);
-  registerCommands(pi, ctx);
 
   // -------------------------------------------------------------------------
   // Lifecycle hooks
@@ -182,68 +78,435 @@ export default function memoryExtension(pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, c) => {
     currentProject = detectProject(c.cwd);
-    if (!DatabaseSync) { c.ui.setStatus("lntrx-memory", "mem off"); return; }
-    const d = ensureDb();
-    c.ui.setStatus("lntrx-memory", d ? "mem" : "mem off");
+    projectDir = projectMemoryDir(currentProject);
+    globalDir = globalMemoryDir();
 
-    const last = getLatestAnatomy();
-    if (!last || (Date.now() / 1000 - last.created) > 86400) {
-      const result = scanAnatomy(currentProject);
-      const md = anatomyToMarkdown(currentProject, result);
-      const d2 = ensureDb();
-      if (d2) {
-        d2.prepare("DELETE FROM entries WHERE category = 'anatomy' AND project = ?").run(currentProject);
-        save({ category: "anatomy", headline: `Project anatomy: ${result.files} files, ${result.tokens.toLocaleString()} tokens`, detail: md.slice(0, 8000), scope: "project" });
+    // Ensure directories exist
+    ensureDirs([projectDir, globalDir]);
+    c.ui.setStatus("lntrx-memory", "mem");
+
+    // Skip scan if detectProject fell back to cwd and there's no real project
+    const isFallback = currentProject === c.cwd && !existsSync(join(c.cwd, ".git"));
+    if (isFallback) {
+      c.ui.setStatus("lntrx-memory", "mem (no project)");
+    } else {
+      // Regenerate anatomy if older than 24h or missing
+      const existing = readAnatomy(projectDir);
+      if (!existing) {
+        const result = scanAnatomy(currentProject);
+        const md = anatomyToMarkdown(currentProject, result);
+        writeAnatomy(projectDir, md);
       }
+
+      // Regenerate INDEX.md
+      const allMemories = listMemories(projectDir);
+      const projectName = currentProject.split("/").pop() || "";
+      writeIndex(projectDir, generateIndex(allMemories, projectName));
     }
 
-    const anatomy = getLatestAnatomy();
+    // Inject anatomy into context
+    const anatomy = readAnatomy(projectDir);
     if (anatomy) {
-      pi.sendMessage({ customType: "lntrx-memory-anatomy", content: anatomy.detail.slice(0, 2000), display: false });
+      pi.sendMessage({
+        customType: "lntrx-memory-anatomy",
+        content: anatomy.slice(0, 2000),
+        display: false,
+      });
     }
   });
 
   pi.on("before_agent_start", async (event) => {
-    currentProject = detectProject(event.systemPromptOptions.cwd || process.cwd());
+    currentProject = detectProject(event.systemPromptOptions?.cwd || process.cwd());
+    projectDir = projectMemoryDir(currentProject);
+
     const prompt = event.prompt?.trim() || "";
-    if (!prompt) return;
+    if (!prompt) {
+      return { systemPrompt: [event.systemPrompt, TOOL_GUIDANCE].filter(Boolean).join("\n\n") };
+    }
 
-    const rows = search(prompt, 5, "project");
-    const recallBlock = rows.length ? ["Relevant local memory:", formatEntries(rows)].join("\n") : "";
+    // Load hot context (INDEX.md first 200 lines)
+    const hot = loadHotContext(projectDir);
 
-    const openBugs = listBugs(currentProject).filter(b => b.state === "open").slice(0, 3);
-    const bugBlock = openBugs.length ? ["\nOpen bugs:", ...openBugs.map(b => `  #${b.id} ${b.symptom.slice(0, 100)} -> ${b.solution.slice(0, 100)}`)].join("\n") : "";
+    // Search relevant memories (text search fallback)
+    const dirs = getDirs("project");
+    const matches = searchMemories(dirs, prompt).slice(0, 5);
 
-    return { systemPrompt: [event.systemPrompt, TOOL_GUIDANCE, recallBlock, bugBlock].filter(Boolean).join("\n\n") };
+    // Build context blocks
+    const blocks: string[] = [TOOL_GUIDANCE];
+
+    if (hot) blocks.push("## Memory Index\n\n" + hot);
+
+    if (matches.length > 0) {
+      const recallLines = ["## Relevant memories"];
+      for (const m of matches) {
+        const warn = freshnessWarning(m);
+        recallLines.push(
+          `### ${m.frontmatter.category}: ${m.path}`,
+          `*${m.frontmatter.created.slice(0, 10)}*${warn ? " " + warn : ""}`,
+          "",
+          m.body.slice(0, 500),
+          "",
+        );
+      }
+      blocks.push(recallLines.join("\n"));
+    }
+
+    // Staleness report: broken (source deleted) vs aging (>90d)
+    const allMemories = listMemories(projectDir);
+    const stale = formatStalenessReport(allMemories, currentProject);
+    if (stale) blocks.push(stale);
+
+    return {
+      systemPrompt: [event.systemPrompt, ...blocks].filter(Boolean).join("\n\n"),
+    };
   });
 
   pi.on("agent_end", async (event) => {
-    if (!ensureDb()) return;
+    // Parse <remember> blocks from assistant response
     const text = getLastAssistantText(event.messages as unknown[]);
     if (!text) return;
     for (const b of parseRememberBlocks(text)) {
-      save({ headline: b.headline, detail: b.detail, category: b.category, labels: b.labels, scope: b.scope });
+      saveMemory(
+        projectDir,
+        (b.category as MemoryFrontmatter["category"]) || "fact",
+        b.headline,
+        b.detail,
+        { labels: b.labels, scope: "project" },
+      );
     }
+
+    // Regenerate INDEX after session
+    const allMemories = listMemories(projectDir);
+    const projectName = currentProject.split("/").pop() || "";
+    writeIndex(projectDir, generateIndex(allMemories, projectName));
   });
 
-  pi.on("message_end", async (e) => {
-    if (e.message.role !== "assistant") return;
-    const c = e.message.content;
-    const text = typeof c === "string" ? c.slice(-500)
-      : Array.isArray(c) ? c.filter((p: any) => p?.type === "text").map((p: any) => p.text).join(" ") : "";
-    setLastAssistantTextBuffer(text);
+  // -------------------------------------------------------------------------
+  // Tools
+  // -------------------------------------------------------------------------
+
+  pi.registerTool({
+    name: "lntrx_memory_search",
+    label: "Memory Search",
+    description:
+      "Search local cross-session memory for prior decisions, conventions, bugs, and preferences.",
+    promptSnippet: "Check memory before implementing",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Free-text query" },
+        limit: { type: "number", description: "Maximum results (default: 5, max: 20)" },
+        scope: {
+          type: "string",
+          enum: ["project", "global", "all"],
+          description: "project = current project + global, global = only global, all = everything",
+        },
+      },
+      required: ["query"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const query = String(params.query || "");
+      const limit = Math.min(Number(params.limit) || 5, 20);
+      const scope = (params.scope as "project" | "global" | "all") || "project";
+
+      const dirs = getDirs(scope);
+      const results = searchMemories(dirs, query).slice(0, limit);
+
+      const lines = results.map((m) => {
+        const warn = freshnessWarning(m);
+        return [
+          `### ${m.frontmatter.category}: ${m.path}`,
+          `*${m.frontmatter.created.slice(0, 10)}*${warn ? " " + warn : ""}`,
+          "",
+          m.body.slice(0, 800),
+          "",
+        ].join("\n");
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: results.length > 0 ? lines.join("\n---\n\n") : "No matching memories found.",
+          },
+        ],
+        details: { query, scope, count: results.length },
+      };
+    },
   });
 
-  pi.on("message_start", async (e) => {
-    if (e.message.role !== "user") return;
-    const prev = getLastAssistantTextBuffer();
-    if (!prev) return;
-    const t = typeof e.message.content === "string" ? e.message.content
-      : Array.isArray(e.message.content) ? e.message.content.filter((p: any) => p?.type === "text").map((p: any) => p.text).join(" ") : "";
-    if (isCorrection(t)) {
-      const summary = t.replace(/\n/g, " ").slice(0, 200);
-      save({ category: "correction", headline: `Correction: ${summary}`, detail: `User corrected the assistant.\n\nUser: ${summary}\n\nAssistant: ${prev.slice(0, 500)}`, scope: "project" });
-      saveBug(summary, "Auto-detected - needs review");
-    }
+  pi.registerTool({
+    name: "lntrx_memory_learn",
+    label: "Memory Learn",
+    description:
+      "Save a durable note to memory. Agent prefers writing directly to .pi/memory/ via Write tool.",
+    promptSnippet: "Record or update what you just learned",
+    parameters: {
+      type: "object",
+      properties: {
+        headline: { type: "string", description: "Short title / headline" },
+        detail: { type: "string", description: "Longer explanation" },
+        category: {
+          type: "string",
+          enum: ["decision", "fact", "convention", "bug", "correction", "preference"],
+          description: "Memory category",
+        },
+        labels: { type: "string", description: "Comma-separated tags" },
+        scope: { type: "string", enum: ["project", "global"], description: "Scope" },
+      },
+      required: ["headline"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const headline = String(params.headline || "");
+      const detail = String(params.detail || "");
+      const category = (params.category as MemoryFrontmatter["category"]) || "fact";
+      const scope = (params.scope as "project" | "global") || "project";
+
+      const dir = scope === "global" ? globalDir : projectDir;
+      const relPath = saveMemory(dir, category, headline, detail, {
+        labels: params.labels ? String(params.labels) : undefined,
+        scope,
+      });
+
+      if (!relPath) {
+        return { content: [{ type: "text", text: "Failed to save." }], details: { ok: false } };
+      }
+
+      // Regenerate index
+      const allMemories = listMemories(dir);
+      const projectName = currentProject.split("/").pop() || "";
+      writeIndex(dir, generateIndex(allMemories, projectName));
+
+      return {
+        content: [{ type: "text", text: `Saved: ${relPath}` }],
+        details: { ok: true, path: relPath },
+      };
+    },
   });
+
+  pi.registerTool({
+    name: "lntrx_memory_forget",
+    label: "Memory Forget",
+    description: "Delete a memory file by path.",
+    promptSnippet: "Delete a memory entry",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Relative path to the memory file" },
+        scope: { type: "string", enum: ["project", "global"], description: "Scope" },
+      },
+      required: ["path"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const relPath = String(params.path || "");
+      const scope = (params.scope as "project" | "global") || "project";
+      const dir = scope === "global" ? globalDir : projectDir;
+
+      const ok = deleteMemory(dir, relPath);
+
+      // Regenerate index
+      const allMemories = listMemories(dir);
+      const projectName = currentProject.split("/").pop() || "";
+      writeIndex(dir, generateIndex(allMemories, projectName));
+
+      return {
+        content: [{ type: "text", text: ok ? `Deleted: ${relPath}` : `Not found: ${relPath}` }],
+        details: { ok },
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "lntrx_memory_scan",
+    label: "Memory Scan",
+    description: "Scan the current project and store an anatomy map in memory.",
+    promptSnippet: "Scan project anatomy",
+    parameters: { type: "object", properties: {} },
+    async execute() {
+      currentProject = detectProject(process.cwd());
+      projectDir = projectMemoryDir(currentProject);
+
+      const result = scanAnatomy(currentProject);
+      const md = anatomyToMarkdown(currentProject, result);
+      writeAnatomy(projectDir, md);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Scanned: ${result.files} files, ${result.tokens.toLocaleString()} tokens → anatomy.md`,
+          },
+        ],
+        details: { ok: true, files: result.files, tokens: result.tokens },
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "lntrx_memory_bug",
+    label: "Memory Bug",
+    description: "Track a bug. Writes to bugs/ directory.",
+    promptSnippet: "Track or update a bug",
+    parameters: {
+      type: "object",
+      properties: {
+        symptom: { type: "string", description: "What went wrong" },
+        solution: { type: "string", description: "How it was fixed" },
+        state: {
+          type: "string",
+          enum: ["open", "fixed", "wontfix", "duplicate"],
+          description: "Bug state",
+        },
+      },
+      required: ["symptom"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const symptom = String(params.symptom || "");
+      const solution = String(params.solution || "");
+      const state = String(params.state || "open");
+
+      const body = `**State:** ${state}\n\n**Symptom:** ${symptom}\n\n**Solution:** ${solution || "(none yet)"}\n`;
+
+      const relPath = saveMemory(projectDir, "bug", symptom, body, {
+        labels: `state:${state}`,
+        scope: "project",
+      });
+
+      return {
+        content: [
+          { type: "text", text: relPath ? `Bug saved: ${relPath}` : "Failed to save bug." },
+        ],
+        details: { ok: !!relPath, path: relPath },
+      };
+    },
+  });
+
+  // -------------------------------------------------------------------------
+  // Commands
+  // -------------------------------------------------------------------------
+
+  pi.registerCommand("memory", {
+    description: "Memory: search|learn|forget|scan|index|cleanup|list [<args>]",
+    handler: async (args, c) => {
+      const parts = args.trim().split(/\s+/);
+      const sub = parts[0];
+      const rest = parts.slice(1).join(" ");
+
+      if (!sub || sub === "list") {
+        const all = listMemories(projectDir);
+        const global = listMemories(globalDir);
+        const total = all.length + global.length;
+        c.ui.notify(
+          `${total} memories (${all.length} project, ${global.length} global) in .pi/memory/`,
+          "info",
+        );
+        return;
+      }
+
+      if (sub === "search") {
+        if (!rest) { c.ui.notify("/memory search <query>", "warning"); return; }
+        const dirs = getDirs("project");
+        const results = searchMemories(dirs, rest).slice(0, 10);
+        if (results.length === 0) {
+          c.ui.notify("No matches.", "info");
+        } else {
+          c.ui.notify(
+            results.map((m) => `[${m.frontmatter.category}] ${m.path}`).join("\n"),
+            "info",
+          );
+        }
+        return;
+      }
+
+      if (sub === "learn") {
+        if (!rest) { c.ui.notify("/memory learn <headline>", "warning"); return; }
+        const relPath = saveMemory(projectDir, "fact", rest, "");
+        c.ui.notify(relPath ? `Saved: ${relPath}` : "Failed.", relPath ? "success" : "error");
+        return;
+      }
+
+      if (sub === "forget") {
+        if (!rest) { c.ui.notify("/memory forget <path>", "warning"); return; }
+        const ok = deleteMemory(projectDir, rest);
+        c.ui.notify(ok ? `Deleted: ${rest}` : `Not found: ${rest}`, ok ? "success" : "error");
+        return;
+      }
+
+      if (sub === "scan") {
+        c.ui.notify("Scanning...", "info");
+        const result = scanAnatomy(currentProject);
+        const md = anatomyToMarkdown(currentProject, result);
+        writeAnatomy(projectDir, md);
+        c.ui.notify(
+          `Scanned: ${result.files} files, ${result.tokens.toLocaleString()} tokens → anatomy.md`,
+          "success",
+        );
+        return;
+      }
+
+      if (sub === "index") {
+        const all = listMemories(projectDir);
+        const projectName = currentProject.split("/").pop() || "";
+        const index = generateIndex(all, projectName);
+        writeIndex(projectDir, index);
+        c.ui.notify(`INDEX.md regenerated (${all.length} entries).`, "success");
+        return;
+      }
+
+      if (sub === "cleanup") {
+        const all = listMemories(projectDir);
+        const report = formatStalenessReport(all, currentProject);
+        c.ui.notify(report || "No stale or broken memories found.", "info");
+        return;
+      }
+
+      c.ui.notify("/memory list|search|learn|forget|scan|index|cleanup", "info");
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Helpers (from old text.ts - kept for <remember> block parsing)
+// ---------------------------------------------------------------------------
+
+interface RememberBlock {
+  headline: string;
+  detail: string;
+  category?: string;
+  labels?: string;
+  scope?: string;
+}
+
+function getLastAssistantText(messages: unknown[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i] as Record<string, unknown>;
+    if (msg.role === "assistant") {
+      const content = msg.content;
+      if (typeof content === "string") return content;
+      if (Array.isArray(content)) {
+        return content
+          .filter((p: Record<string, unknown>) => p.type === "text")
+          .map((p: Record<string, unknown>) => String(p.text || ""))
+          .join("\n");
+      }
+    }
+  }
+  return "";
+}
+
+function parseRememberBlocks(text: string): RememberBlock[] {
+  const blocks: RememberBlock[] = [];
+  const regex = /<remember>([\s\S]*?)<\/remember>/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const inner = match[1].trim();
+    const parts: RememberBlock = { headline: "", detail: inner };
+    const lines = inner.split("\n");
+    if (lines.length > 0) {
+      parts.headline = lines[0].replace(/^#+\s*/, "").trim();
+      parts.detail = lines.slice(1).join("\n").trim() || inner;
+    }
+    blocks.push(parts);
+  }
+  return blocks;
 }

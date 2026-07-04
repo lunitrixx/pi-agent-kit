@@ -11,10 +11,9 @@ const CODE_EXTS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".c", ".h", ".cpp",
   ".lua", ".md", ".json", ".yaml", ".toml",
 ]);
-// Hardcoded baseline - always skipped regardless of ignore file
-const SCAN_IGNORE = new Set([
-  ".git", "node_modules", ".pi", "dist", "build", "__pycache__", ".next", "target",
-]);
+// Only .pi/memory/ is hardcoded — the extension's own output.
+// Everything else comes from .gitignore / .scanignore.
+const SCAN_IGNORE_PREFIX = ".pi/memory/";
 
 // SQLite WAL/SHM files that sit next to any .db file
 const DB_ARTIFACT_EXTS = new Set([".db-shm", ".db-wal", ".db-wal2"]);
@@ -131,12 +130,15 @@ export function scanAnatomy(root: string): { files: number; tokens: number; byEx
   function walk(dir: string) {
     try {
       for (const f of fs.readdirSync(dir)) {
-        if (SCAN_IGNORE.has(f)) continue;
-        // Skip SQLite WAL/SHM artifacts next to .db files
-        if (DB_ARTIFACT_EXTS.has(path.extname(f).toLowerCase())) continue;
         const full = path.join(dir, f);
         const rel = path.relative(root, full);
-        const st = fs.statSync(full);
+        // Skip the extension's own memory output
+        if (rel.startsWith(SCAN_IGNORE_PREFIX) || rel === ".pi/memory") continue;
+        // Skip SQLite WAL/SHM artifacts next to .db files
+        if (DB_ARTIFACT_EXTS.has(path.extname(f).toLowerCase())) continue;
+        let st;
+        try { st = fs.lstatSync(full); } catch { continue; }
+        if (st.isSymbolicLink()) continue;
         if (st.isDirectory()) {
           if (isIgnored(rel + "/", true, ignorePatterns)) continue;
           walk(full);
@@ -177,7 +179,9 @@ export function anatomyToMarkdown(root: string, result: ReturnType<typeof scanAn
     "",
   ];
   for (const [ext, paths] of Object.entries(result.byExt).sort()) {
-    lines.push(`## ${ext}`, ...paths.map((p) => `- \`${p}\``), "");
+    lines.push(`## ${ext}`);
+    for (const p of paths) lines.push(`- \`${p}\``);
+    lines.push("");
   }
   return lines.join("\n");
 }
