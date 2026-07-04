@@ -5,7 +5,7 @@
  * Core logic: store, search, index, staleness.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { detectProject, projectMemoryDir, globalMemoryDir, resolveDirs, ensureDirs } from "./paths.js";
@@ -23,6 +23,7 @@ import type { MemoryFile, MemoryFrontmatter } from "./frontmatter.js";
 import { scanAnatomy, anatomyToMarkdown } from "./scanner.js";
 import { generateIndex, writeIndex, loadHotContext } from "./index.js";
 import { freshnessWarning, formatStalenessReport } from "./stale.js";
+import { loadConfig } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Extension
@@ -90,9 +91,19 @@ export default function memoryExtension(pi: ExtensionAPI) {
     if (isFallback) {
       c.ui.setStatus("lntrx-memory", "mem (no project)");
     } else {
-      // Regenerate anatomy if older than 24h or missing
-      const existing = readAnatomy(projectDir);
-      if (!existing) {
+      const config = loadConfig(projectDir);
+      const anatomyPath = join(projectDir, "anatomy.md");
+      let shouldRescan = false;
+
+      try {
+        const st = statSync(anatomyPath);
+        const ageDays = (Date.now() - st.mtimeMs) / (1000 * 60 * 60 * 24);
+        if (ageDays >= config.anatomyRescanDays) shouldRescan = true;
+      } catch {
+        shouldRescan = true; // File doesn't exist
+      }
+
+      if (shouldRescan) {
         const result = scanAnatomy(currentProject);
         const md = anatomyToMarkdown(currentProject, result);
         writeAnatomy(projectDir, md);
