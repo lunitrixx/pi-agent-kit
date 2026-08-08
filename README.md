@@ -8,21 +8,19 @@ Pi-native toolkit providing extensions, skills, themes, prompts, and specialized
 pi install npm:@lunitrixx/pi-agent-kit
 ```
 
-### Extensions (13)
+### Extensions (14)
 | Extension | What |
 |---|---|
 | `lntrx-header` | Rainbow LUNITRIXX banner + system info |
 | `lntrx-lang` | `/lang de\|en` — response language |
 | `lntrx-grill-me` | Socratic planning interview with severity levels |
-| `lntrx-config` | Auto-provision web-search + shared config (`~/.pi/agent/`) |
 | `lntrx-footer` | Token/cost/speed footer |
-| `lntrx-guard` | Dangerous command confirmation, secret scanning, pre-commit hook blocking direct commits to main |
-| `lntrx-health` | `/health` — codebase health: TODOs, large files, stale deps |
-| `lntrx-context` | `/ctx` token usage report |
-| `lntrx-localmodels` | Local LLM endpoint manager (`/localmodel`) |
-| `lntrx-lsp` | LSP diagnostics after write |
-| `lntrx-fmt` | Auto-format on write |
-| `lntrx-memory` | Cross-session project memory (cerebrum, anatomy, buglog, scratchpad, daily) |
+| `lntrx-permit` | Permission system: path, tool, bash, external-directory surfaces with shell tokenizer |
+| `lntrx-githooks` | Git hooks (pre-commit main-block) — split from old lntrx-guard |
+| `lntrx-health` | `/health` — codebase health: TODOs, large files, model/cost summary |
+| `lntrx-localmodels` | Local LLM endpoint manager (`/local-models`) |
+| `lntrx-postwrite` | Auto-format + LSP diagnostics on write/edit (merged from lntrx-fmt + lntrx-lsp) |
+| `lntrx-memory` | Cross-session SQLite memory with FTS5 search, anatomy scanning, bug tracking |
 | `lntrx-project-rules` | Inject `.pi/rules/` into system prompt + banner widget |
 
 ### Skills (15)
