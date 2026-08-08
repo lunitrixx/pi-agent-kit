@@ -8,7 +8,7 @@ Pi-native toolkit providing extensions, skills, themes, prompts, and specialized
 pi install npm:@lunitrixx/pi-agent-kit
 ```
 
-### Extensions (14)
+### Extensions (11)
 | Extension | What |
 |---|---|
 | `lntrx-header` | Rainbow LUNITRIXX banner + system info |
