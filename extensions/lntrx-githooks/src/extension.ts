@@ -73,7 +73,12 @@ function removeHook(repoPath: string, hook: HookDef): boolean {
   return true;
 }
 
-// ---- Block git commit on main at the tool-call level (saves agent time) ----
+// ---------------------------------------------------------------------------
+// Extension
+// ---------------------------------------------------------------------------
+
+export default function (pi: ExtensionAPI) {
+  // ---- Block git commit on main at the tool-call level (saves agent time) ----
   pi.on("tool_call", async (event, ctx) => {
     if (event.toolName !== "bash") return;
     const cmd: string | undefined = (event.input as any)?.command;
