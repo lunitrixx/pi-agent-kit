@@ -47,24 +47,27 @@ Auto-detected by Pi from your prompt.
 | `pi-project-setup` | "initialize a project", "scaffold", "migrate to AGENTS.md" |
 
 ### Agents
-Subagents via `subagent` tool or `/parallel` command (pi-subagents).
-
-| Agent | Purpose |
-|---|---|
-| `reviewer` | Code review |
-| `planner` | Implementation planning |
-| `scout` | Explore codebase |
-| `worker` | Implementation |
-| `oracle` | Second opinion |
+Install `pi-subagents` for the `subagent` tool (see companion packages above).
 
 ### Theme
 `/theme lunitrixx` — Dark amber theme with nerd font symbols.
 
-### Bundled
-- `pi-web-access` — web_search, fetch_content
-- `pi-mcp-adapter` — MCP proxy tool
-- `pi-subagents` — subagent delegation (reviewer, planner, worker, scout, oracle)
-- `librarian` skill — open-source library research
+## Optional companion packages
+
+These Pi packages integrate well but are not bundled — install separately:
+
+```bash
+# Web access — web_search and fetch_content tools, librarian skill
+pi install npm:pi-web-access
+
+# MCP adapter — connect to MCP servers
+pi install npm:pi-mcp-adapter
+
+# Subagents — subagent delegation (reviewer, planner, worker, scout, oracle)
+pi install npm:pi-subagents
+```
+
+Without `pi-subagents`, the `subagent` tool is unavailable.
 
 ## Development
 

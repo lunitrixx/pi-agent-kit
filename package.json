@@ -1,6 +1,6 @@
 {
   "name": "@lunitrixx/pi-agent-kit",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Pi-native agent kit: extensions, skills, themes, prompts, and agents for pi-coding-agent",
   "type": "module",
   "workspaces": [
@@ -19,21 +19,11 @@
     "type": "git",
     "url": "https://github.com/lunitrixx/pi-agent-kit.git"
   },
-  "dependencies": {
-    "pi-web-access": "^0.13.0",
-    "pi-mcp-adapter": "^2.10.0",
-    "pi-subagents": "^0.31.0"
-  },
-  "bundledDependencies": [
-    "pi-web-access",
-    "pi-mcp-adapter",
-    "pi-subagents"
-  ],
   "peerDependencies": {
-    "typebox": "*",
     "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-tui": "*",
     "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*",
     "zod": "*"
   },
   "pi": {
@@ -50,14 +40,10 @@
       "extensions/lntrx-lsp",
       "extensions/lntrx-fmt",
       "extensions/lntrx-memory",
-      "extensions/lntrx-project-rules",
-      "node_modules/pi-web-access",
-      "node_modules/pi-mcp-adapter",
-      "node_modules/pi-subagents"
+      "extensions/lntrx-project-rules"
     ],
     "skills": [
-      "skills",
-      "node_modules/pi-web-access/skills"
+      "skills"
     ],
     "themes": [
       "themes"
