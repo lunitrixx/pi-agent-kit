@@ -23,9 +23,11 @@ import {
   getLastAssistantTextBuffer,
   setLastAssistantTextBuffer,
   isCorrection,
+  hasErrorPattern,
 } from "./text.js";
 import { registerTools } from "./tools.js";
 import { registerCommands } from "./commands.js";
+import { get, getProject } from "../../lntrx-config/src/config";
 
 // Re-export for backward compat (tests import from extension.ts)
 export { defaultDbPath, detectProject, GLOBAL_SCOPE, openDb, DatabaseSync, sqliteLoadError } from "./db.js";
@@ -43,6 +45,34 @@ const TOOL_GUIDANCE = [
   "Use lntrx_memory_learn (or wrap durable facts in <remember>...</remember> in your reply) to persist them.",
   "By default memories are scoped to the current project; pass scope:\"global\" for cross-project notes.",
 ].join(" ");
+
+const SEARCH_HINT = [
+  "You have access to cross-session memory via lntrx_memory_search.",
+  "Call it before making decisions that could benefit from prior context.",
+].join(" ");
+
+// ---------------------------------------------------------------------------
+// Secret redaction – inline port from lntrx-guard patterns (Phase 3.2)
+// ---------------------------------------------------------------------------
+
+const SECRET_PATTERNS: { name: string; pattern: RegExp }[] = [
+  { name: "OpenAI Key",       pattern: /sk-[A-Za-z0-9]{32,}/ },
+  { name: "GitHub Token",     pattern: /gh[pousr]_[A-Za-z0-9]{36,}/ },
+  { name: "AWS Key",          pattern: /AKIA[0-9A-Z]{16}/ },
+  { name: "Google API Key",   pattern: /AIza[0-9A-Za-z\-_]{35}/ },
+  { name: "JWT Token",        pattern: /eyJ[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_.+/=]*/ },
+  { name: "Private Key",      pattern: /-----BEGIN (RSA|EC|DSA|OPENSSH) PRIVATE KEY-----/ },
+  { name: "Slack Token",      pattern: /xox[baprs]-[0-9A-Za-z\-]{10,}/ },
+  { name: "Stripe Key",       pattern: /[sr]k_live_[0-9a-zA-Z]{24,}/ },
+];
+
+function redact(text: string): string {
+  let result = text;
+  for (const s of SECRET_PATTERNS) {
+    result = result.replace(s.pattern, `[REDACTED:${s.name}]`);
+  }
+  return result;
+}
 
 export default function memoryExtension(pi: ExtensionAPI) {
   const dbPath = defaultDbPath();
@@ -69,6 +99,16 @@ export default function memoryExtension(pi: ExtensionAPI) {
 
   function scopeProject(scope: "project" | "global"): string {
     return scope === "global" ? GLOBAL_SCOPE : currentProject;
+  }
+
+  // ---- Config ----
+
+  function memoryMode(): "policy" | "inject" {
+    const p = getProject(currentProject, "lntrx-memory.memoryMode");
+    if (p === "inject" || p === "policy") return p;
+    const g = get("lntrx-memory.memoryMode");
+    if (g === "inject" || g === "policy") return g;
+    return "policy";
   }
 
   // ---- CRUD ----
@@ -118,8 +158,8 @@ export default function memoryExtension(pi: ExtensionAPI) {
       scope: args.scope || "project",
       project: scopeProject(args.scope || "project"),
       category: args.category || "note",
-      headline: args.headline.slice(0, 500),
-      detail: (args.detail || "").slice(0, 8000),
+      headline: redact(args.headline.slice(0, 500)),
+      detail: redact((args.detail || "").slice(0, 8000)),
       labels: args.labels || "",
     };
     const res = d.prepare("INSERT INTO entries(created, scope, project, category, headline, detail, labels) VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -132,7 +172,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
     const d = ensureDb();
     if (!d) return null;
     const res = d.prepare("INSERT INTO bugs(created, project, symptom, solution) VALUES (unixepoch(), ?, ?, ?)")
-      .run(currentProject, symptom.slice(0, 2000), solution.slice(0, 2000));
+      .run(currentProject, redact(symptom.slice(0, 2000)), redact(solution.slice(0, 2000)));
     checkpoint();
     return {
       id: Number(res.lastInsertRowid),
@@ -153,6 +193,40 @@ export default function memoryExtension(pi: ExtensionAPI) {
     return (d.prepare("SELECT id, created, scope, project, category, headline, detail, labels FROM entries WHERE category = 'anatomy' AND project = ? ORDER BY created DESC LIMIT 1").get(currentProject) as Entry | undefined) || null;
   }
 
+  // ---- Aging (Phase 3.3) ----
+
+  function pruneStale(): { entries: number; bugs: number } {
+    const d = ensureDb();
+    if (!d) return { entries: 0, bugs: 0 };
+    const cutoffCorrections = Math.floor(Date.now() / 1000) - 86400 * 90;
+    const cutoffClosedBugs = Math.floor(Date.now() / 1000) - 86400 * 30;
+    const ec = d.prepare(
+      "DELETE FROM entries WHERE category = 'correction' AND created < ?"
+    ).run(cutoffCorrections);
+    const bc = d.prepare(
+      "DELETE FROM bugs WHERE state IN ('fixed','wontfix','duplicate') AND created < ?"
+    ).run(cutoffClosedBugs);
+    if (ec.changes > 0 || bc.changes > 0) checkpoint();
+    return { entries: ec.changes, bugs: bc.changes };
+  }
+
+  function prunePreview(): {
+    entries: { id: number; created: number; headline: string }[];
+    bugs: { id: number; created: number; symptom: string }[];
+  } {
+    const d = ensureDb();
+    if (!d) return { entries: [], bugs: [] };
+    const cutoffCorrections = Math.floor(Date.now() / 1000) - 86400 * 90;
+    const cutoffClosedBugs = Math.floor(Date.now() / 1000) - 86400 * 30;
+    const entries = d.prepare(
+      "SELECT id, created, headline FROM entries WHERE category = 'correction' AND created < ?"
+    ).all(cutoffCorrections) as { id: number; created: number; headline: string }[];
+    const bugs = d.prepare(
+      "SELECT id, created, symptom FROM bugs WHERE state IN ('fixed','wontfix','duplicate') AND created < ?"
+    ).all(cutoffClosedBugs) as { id: number; created: number; symptom: string }[];
+    return { entries, bugs };
+  }
+
   // -------------------------------------------------------------------------
   // Wire up tools & commands
   // -------------------------------------------------------------------------
@@ -162,6 +236,7 @@ export default function memoryExtension(pi: ExtensionAPI) {
     checkpoint,
     scopeProject,
     get currentProject() { return currentProject; },
+    memoryMode,
     search,
     save,
     saveBug,
@@ -171,6 +246,8 @@ export default function memoryExtension(pi: ExtensionAPI) {
     dbPath,
     DatabaseSync,
     sqliteLoadError,
+    pruneStale,
+    prunePreview,
   };
 
   registerTools(pi, ctx);
@@ -184,7 +261,17 @@ export default function memoryExtension(pi: ExtensionAPI) {
     currentProject = detectProject(c.cwd);
     if (!DatabaseSync) { c.ui.setStatus("lntrx-memory", "mem off"); return; }
     const d = ensureDb();
-    c.ui.setStatus("lntrx-memory", d ? "mem" : "mem off");
+    const mode = memoryMode();
+    c.ui.setStatus("lntrx-memory", d ? `mem (${mode})` : "mem off");
+
+    // Aging: prune stale corrections (>90d) and closed bugs (>30d) each session
+    const pruned = pruneStale();
+    if (pruned.entries > 0 || pruned.bugs > 0) {
+      const parts: string[] = [];
+      if (pruned.entries > 0) parts.push(`${pruned.entries} old corrections`);
+      if (pruned.bugs > 0) parts.push(`${pruned.bugs} closed bugs`);
+      c.ui.notify(`lntrx-memory: Pruned ${parts.join(" and ")}.`, "info");
+    }
 
     const last = getLatestAnatomy();
     if (!last || (Date.now() / 1000 - last.created) > 86400) {
@@ -208,13 +295,26 @@ export default function memoryExtension(pi: ExtensionAPI) {
     const prompt = event.prompt?.trim() || "";
     if (!prompt) return;
 
-    const rows = search(prompt, 5, "project");
-    const recallBlock = rows.length ? ["Relevant local memory:", formatEntries(rows)].join("\n") : "";
+    const mode = memoryMode();
+
+    // Always inject: TOOL_GUIDANCE, search hint, open bugs, anatomy
+    const guidanceBlock = [TOOL_GUIDANCE, SEARCH_HINT].join("\n");
+
+    // Search results only in "inject" mode (saves ~90% token overhead in default "policy")
+    let recallBlock = "";
+    if (mode === "inject") {
+      const rows = search(prompt, 5, "project");
+      if (rows.length) {
+        recallBlock = ["Relevant local memory:", formatEntries(rows)].join("\n");
+      }
+    }
 
     const openBugs = listBugs(currentProject).filter(b => b.state === "open").slice(0, 3);
-    const bugBlock = openBugs.length ? ["\nOpen bugs:", ...openBugs.map(b => `  #${b.id} ${b.symptom.slice(0, 100)} -> ${b.solution.slice(0, 100)}`)].join("\n") : "";
+    const bugBlock = openBugs.length
+      ? ["\nOpen bugs:", ...openBugs.map(b => `  #${b.id} ${b.symptom.slice(0, 100)} -> ${b.solution.slice(0, 100)}`)].join("\n")
+      : "";
 
-    return { systemPrompt: [event.systemPrompt, TOOL_GUIDANCE, recallBlock, bugBlock].filter(Boolean).join("\n\n") };
+    return { systemPrompt: [event.systemPrompt, guidanceBlock, recallBlock, bugBlock].filter(Boolean).join("\n\n") };
   });
 
   pi.on("agent_end", async (event) => {
@@ -243,7 +343,38 @@ export default function memoryExtension(pi: ExtensionAPI) {
     if (isCorrection(t)) {
       const summary = t.replace(/\n/g, " ").slice(0, 200);
       save({ category: "correction", headline: `Correction: ${summary}`, detail: `User corrected the assistant.\n\nUser: ${summary}\n\nAssistant: ${prev.slice(0, 500)}`, scope: "project" });
-      saveBug(summary, "Auto-detected - needs review");
+      // Only create a bug when the correction contains a recognizable error pattern
+      if (hasErrorPattern(t)) {
+        saveBug(summary, prev.slice(0, 500));
+      }
     }
+  });
+
+  // ---- Flush hooks (Phase 3.5) ----
+
+  pi.on("session_before_compact", async (_event, c) => {
+    if (!ensureDb()) return;
+    const d = ensureDb();
+    if (!d) return;
+    try { d.exec("PRAGMA wal_checkpoint(TRUNCATE)"); } catch { /* best-effort */ }
+    const total = (d.prepare("SELECT COUNT(*) AS n FROM entries").get() as { n: number }).n;
+    c.ui.notify(`lntrx-memory: Flushed ${total} entries before context compaction.`, "info");
+  });
+
+  pi.on("session_shutdown", async () => {
+    if (!ensureDb()) return;
+    const d = ensureDb();
+    if (!d) return;
+    try { d.exec("PRAGMA wal_checkpoint(TRUNCATE)"); } catch { /* best-effort */ }
+  });
+
+  pi.on("turn_end", async (_event, c) => {
+    const p = getProject(currentProject, "lntrx-memory.reviewInterval");
+    const g = get("lntrx-memory.reviewInterval");
+    const interval = (typeof p === "number" ? p : typeof g === "number" ? g : 0) as number;
+    if (interval <= 0) return;
+    const turnIndex = (_event as any).turnIndex as number;
+    if (!turnIndex || turnIndex % interval !== 0) return;
+    c.ui.notify(`lntrx-memory: Turn ${turnIndex} — consider /memory scan.`, "info");
   });
 }
