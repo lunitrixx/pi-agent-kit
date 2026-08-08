@@ -59,27 +59,30 @@ function getSysInfo(): string[] {
 
 export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
+    // Cache sysinfo once at session start – was called on every render frame (4 subprocesses each)
+    const isLinux = process.platform === "linux";
+    const sysInfo: string[] = isLinux ? getSysInfo() : [];
+
     ctx.ui.setHeader((_tui, _theme) => ({
       render(_width: number): string[] {
-        const sys = getSysInfo();
         const sloganRaw = "Now you're part of the frequency.";
         const linkRaw = "https://linktr.ee/lunitrixx";
         const lw = Math.max(...LUNITRIXX.map((l) => l.replace(/\x1b\[[0-9;]*m/g, "").length));
         const padSlogan = " ".repeat(Math.max(0, Math.floor((lw - sloganRaw.length) / 2)));
         const padLink = " ".repeat(Math.max(0, Math.floor((lw - linkRaw.length) / 2)));
         const P = "  ";
-        return [
+        const parts = [
           "",
           ...LUNITRIXX.map((l) => P + l),
           "",
           P + `${padSlogan}${C.accent}${B}${sloganRaw}${X}`,
           "",
           P + `${padLink}${C.text}${linkRaw}${X}`,
-          "",
-          "",
-          ...sys.map((l) => P + l),
-          "",
         ];
+        if (sysInfo.length > 0) {
+          parts.push("", ...sysInfo.map((l) => P + l), "");
+        }
+        return parts;
       },
       invalidate() {},
     }));
