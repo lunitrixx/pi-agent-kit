@@ -62,7 +62,7 @@ const SECRETS: SecretPattern[] = [
   { name: "OpenAI Key",       pattern: /sk-[A-Za-z0-9]{32,}/ },
   { name: "GitHub Token",     pattern: /gh[pousr]_[A-Za-z0-9]{36,}/ },
   { name: "AWS Key",          pattern: /AKIA[0-9A-Z]{16}/ },
-  { name: "AWS Secret",       pattern: /[A-Za-z0-9/+=]{40}/ },
+  { name: "AWS Secret",       pattern: /aws_secret_access_key\s*[=:]\s*\S{40}/i },
   { name: "Google API Key",   pattern: /AIza[0-9A-Za-z\-_]{35}/ },
   { name: "JWT Token",        pattern: /eyJ[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_.+/=]*/ },
   { name: "Private Key",      pattern: /-----BEGIN (RSA|EC|DSA|OPENSSH) PRIVATE KEY-----/ },
@@ -340,7 +340,7 @@ export default function (pi: ExtensionAPI) {
       const edits = (event.input as any)?.edits;
       let text = typeof content === "string" ? content : "";
       if (edits && Array.isArray(edits)) {
-        text = edits.map((e: any) => (e.newText || "") + (e.oldText || "")).join("");
+        text = edits.map((e: any) => (e.newText || "")).join("");
       }
       const secrets = scanSecrets(text);
       if (secrets.length > 0) {
@@ -357,7 +357,7 @@ export default function (pi: ExtensionAPI) {
     // Block direct commits to main
     if (/\bgit\s+commit/.test(cmd) && !/\bgit\s+commit\s+--allow-empty\b/.test(cmd)) {
       try {
-        const branch = execSync("git branch --show-current", { encoding: "utf-8" }).trim();
+        const branch = execSync("git branch --show-current", { encoding: "utf-8", cwd: ctx.cwd }).trim();
         if (branch === "main") {
           return {
             block: true,

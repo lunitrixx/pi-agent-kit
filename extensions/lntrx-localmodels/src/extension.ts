@@ -71,7 +71,7 @@ async function showTui(pi: ExtensionAPI, ctx: any, list: Endpoint[]): Promise<vo
     sl.onCancel = () => done();
     c.addChild(sl);
     c.addChild(new Spacer(1));
-    c.addChild(new Text(theme.fg("dim", "  ↑↓ navigate · enter select · esc back · d delete selected")));
+    c.addChild(new Text(theme.fg("dim", "  ↑↓ navigate · enter select · esc back")));
     c.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
     return {
       render: (w) => c.render(w),
@@ -86,12 +86,13 @@ async function showTui(pi: ExtensionAPI, ctx: any, list: Endpoint[]): Promise<vo
 
 export default async function (pi: ExtensionAPI) {
   // Register known endpoints at startup
-  for (const ep of eps()) {
+  const endpoints = eps();
+  for (const ep of endpoints) {
     const m = await models(ep.url, ep.key);
     ep.status = m.length > 0 ? "up" : "down";
     if (m.length > 0) register(pi, ep, m);
-    save(eps());
   }
+  save(endpoints);
 
   pi.registerCommand("local-models", {
     description: "Manage local LLM endpoints with TUI",

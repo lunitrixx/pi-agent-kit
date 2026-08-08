@@ -23,13 +23,17 @@ export default function (pi: ExtensionAPI) {
       return {
         dispose() {}, invalidate() {},
         render(width: number): string[] {
-          let inp = 0, out = 0, cost = 0;
-          for (const e of ctx.sessionManager.getBranch()) {
+          let out = 0, cost = 0;
+          const branch = ctx.sessionManager.getBranch();
+          let lastInput = 0;
+          for (const e of branch) {
             if (e.type === "message" && e.message.role === "assistant") {
               const m = e.message as AssistantMessage;
-              inp += m.usage.input; out += m.usage.output; cost += m.usage.cost.total;
+              out += m.usage.output; cost += m.usage.cost.total;
+              lastInput = m.usage.input;  // only last message's input = current context
             }
           }
+          const inp = lastInput;
 
           const K = (n: number) => n >= 1e6 ? `${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `${(n/1e3).toFixed(1)}k` : `${n}`;
           const S = ` ${theme.fg("dim", "│")} `;

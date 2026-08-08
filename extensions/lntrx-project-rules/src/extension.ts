@@ -49,12 +49,7 @@ function readRuleBody(rule: RuleFile): string {
 
 class RulesBanner extends Container {
   private ruleNames: string[];
-  private theme: ReturnType<ExtensionAPI["on"]> extends (
-    _event: string,
-    _handler: (_event: never, ctx: infer C) => unknown,
-  ) => unknown
-    ? never
-    : never;
+  private theme: any;
 
   constructor(ruleNames: string[], theme: any) {
     super();
