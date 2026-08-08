@@ -27,7 +27,7 @@ import {
 } from "./text.js";
 import { registerTools } from "./tools.js";
 import { registerCommands } from "./commands.js";
-import { get, getProject } from "../../lntrx-config/src/config";
+import { get, getProject } from "../../../lib/config";
 
 // Re-export for backward compat (tests import from extension.ts)
 export { defaultDbPath, detectProject, GLOBAL_SCOPE, openDb, DatabaseSync, sqliteLoadError } from "./db.js";

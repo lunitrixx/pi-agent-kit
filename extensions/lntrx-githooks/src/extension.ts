@@ -8,7 +8,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execSync } from "child_process";
 import { existsSync, writeFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
-import { get, set, getProject, setProject } from "../../lntrx-config/src/config";
+import { get, set, getProject, setProject } from "../../../lib/config";
 
 // ---------------------------------------------------------------------------
 // Hooks
