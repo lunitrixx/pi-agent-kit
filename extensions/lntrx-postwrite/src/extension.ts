@@ -1,72 +1,49 @@
+/**
+ * lntrx-postwrite - auto-format + LSP diagnostics after write/edit
+ *
+ * Merges lntrx-fmt and lntrx-lsp into one extension with correct ordering:
+ *  1. Format the file (if formatter available)
+ *  2. Diagnose the *formatted* file content with LSP (if server available)
+ *
+ * Hooks on both write and edit (previously lsp only watched write).
+ */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { spawn, ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
-import { extname, resolve } from "node:path";
-import { get, set } from "../../lntrx-config/src/config";
+import { readFileSync } from "node:fs";
+import { extname } from "node:path";
+import { execSync } from "node:child_process";
+import { get, set } from "../../../lib/config";
+import {
+  findRoot, which, FORMATTERS, findFormatter,
+  LANG, BUILTIN_LSP, findServer, LspServer,
+} from "./toolchain";
 
-const NS = "lntrx-lsp";
+const NS = "lntrx-postwrite";
 
-interface LspServer {
-  id: string;              // "gopls", "pyright", "my-custom"
-  bin: string;             // binary name or path
-  args?: string[];         // extra args
-  extensions: string[];    // [".ts", ".js"]
-  rootMarkers?: string[];  // files that mark project root
-}
-
-// Built-in defaults that users can override/extend
-const BUILTIN: LspServer[] = [
-  { id: "typescript",   bin: "typescript-language-server", args: ["--stdio"], extensions: [".ts",".tsx",".js",".jsx"], rootMarkers: ["package.json","tsconfig.json"] },
-  { id: "pyright",      bin: "pyright-langserver", args: ["--stdio"], extensions: [".py",".pyi"], rootMarkers: ["pyproject.toml","setup.py"] },
-  { id: "gopls",        bin: "gopls", extensions: [".go"], rootMarkers: ["go.mod"] },
-  { id: "rust-analyzer",bin: "rust-analyzer", extensions: [".rs"], rootMarkers: ["Cargo.toml"] },
-  { id: "clangd",       bin: "clangd", args: ["--background-index"], extensions: [".c",".h",".cpp",".hpp",".cc",".cxx"], rootMarkers: ["compile_commands.json",".clangd"] },
-  { id: "lua",          bin: "lua-language-server", extensions: [".lua"], rootMarkers: [".luarc.json"] },
-];
+// ---------------------------------------------------------------------------
+// Config: user-defined LSP servers override builtins
+// ---------------------------------------------------------------------------
 
 function userServers(): LspServer[] {
-  const raw = get(NS);
+  const raw = get(`${NS}.lsp-servers`);
   return Array.isArray(raw) ? (raw as LspServer[]) : [];
 }
 
 function allServers(): LspServer[] {
   const user = userServers();
-  if (user.length > 0) return user;  // user config overrides builtins entirely
-  return BUILTIN;
+  if (user.length > 0) return user;
+  return BUILTIN_LSP;
 }
 
-// Save a new server to user config
 function addServer(srv: LspServer) {
   const servers = userServers();
   servers.push(srv);
-  set(NS, servers);
+  set(`${NS}.lsp-servers`, servers);
 }
 
-function findServer(path: string): LspServer | undefined {
-  const ext = extname(path);
-  return allServers().find((s) => s.extensions.includes(ext));
-}
-
-function findRoot(file: string, markers?: string[]): string {
-  const parts = file.split("/");
-  const search = markers ?? [".git", "package.json", "pyproject.toml", "go.mod", "Cargo.toml"];
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const d = parts.slice(0, i + 1).join("/");
-    if (search.some((m) => existsSync(`${d}/${m}`))) return d;
-  }
-  return process.cwd();
-}
-
-function which(bin: string): boolean {
-  try { require("child_process").execSync(`which ${bin}`, { stdio: "ignore" }); return true; } catch { return false; }
-}
-
-const LANG: Record<string, string> = {
-  ".ts":"typescript",".tsx":"typescriptreact",".js":"javascript",".jsx":"javascriptreact",
-  ".py":"python",".go":"go",".rs":"rust",".c":"c",".h":"c",".cpp":"cpp",".lua":"lua",
-};
-
-// ── LSP Client ──
+// ---------------------------------------------------------------------------
+// LSP Client (per server+root, lazy-spawned via getClient)
+// ---------------------------------------------------------------------------
 
 class LspClient {
   private proc: ChildProcess | null = null;
@@ -137,12 +114,21 @@ class LspClient {
     this.proc?.stdin?.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
   }
 
+  /**
+   * Send a file for diagnostics. `content` should be the actual file content
+   * on disk (post-formatting) so line numbers match reality.
+   */
   async diagnostics(path: string, content: string): Promise<any[]> {
     if (!this.ready) await this.initPromise;
     if (!this.ready) return [];
     this.diags = [];
     this.notify("textDocument/didOpen", {
-      textDocument: { uri: `file://${path}`, languageId: LANG[extname(path)] ?? "plaintext", version: 1, text: content },
+      textDocument: {
+        uri: `file://${path}`,
+        languageId: LANG[extname(path)] ?? "plaintext",
+        version: 1,
+        text: content,
+      },
     });
     return new Promise((resolve) => {
       this.diagResolve = resolve;
@@ -153,68 +139,113 @@ class LspClient {
   shutdown() { try { this.proc?.stdin?.end(); this.proc?.kill(); } catch {} }
 }
 
-// ── Extension ──
+// ---------------------------------------------------------------------------
+// Client cache (per server+root)
+// ---------------------------------------------------------------------------
 
 const clients = new Map<string, LspClient>();
 
 function getClient(path: string): LspClient | undefined {
-  const srv = findServer(path);
+  const srv = findServer(path, allServers());
   if (!srv || !which(srv.bin)) return undefined;
-  const root = findRoot(path, srv.rootMarkers);
+  const root = srv.rootMarkers ? findRootIn(path, srv.rootMarkers) : findRoot(path);
   const key = `${srv.id}::${root}`;
   if (!clients.has(key)) clients.set(key, new LspClient(srv.bin, srv.args ?? [], root));
   return clients.get(key);
 }
 
+function findRootIn(file: string, markers: string[]): string {
+  const parts = file.split("/");
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const d = parts.slice(0, i + 1).join("/");
+    if (markers.some((m) => existsSync(`${d}/${m}`))) return d;
+  }
+  return process.cwd();
+}
+
+// ---------------------------------------------------------------------------
+// Extension
+// ---------------------------------------------------------------------------
+
 export default function (pi: ExtensionAPI) {
-  pi.registerCommand("lsp", {
-    description: "Manage LSP servers. /lsp add <id> <bin> <.ext> [.ext2...]",
+  // ---- /postwrite command (LSP server management) ----
+  pi.registerCommand("postwrite", {
+    description: "Manage auto-format + LSP. /postwrite lsp add|list",
     handler: async (args, ctx) => {
       const parts = args.trim().split(/\s+/);
-      if (parts[0] === "add" && parts.length >= 4) {
+      if (parts[0] === "lsp" && parts[1] === "add" && parts.length >= 5) {
         const srv: LspServer = {
-          id: parts[1],
-          bin: parts[2],
-          extensions: parts.slice(3),
+          id: parts[2],
+          bin: parts[3],
+          extensions: parts.slice(4),
         };
         addServer(srv);
         ctx.ui.notify(`LSP server "${srv.id}" added for ${srv.extensions.join(", ")}.`, "success");
-      } else if (parts[0] === "list") {
+      } else if (parts[0] === "lsp" && parts[1] === "list") {
         const servers = allServers();
         if (servers.length === 0) { ctx.ui.notify("No LSP servers configured.", "info"); return; }
         const lines = servers.map((s) => `- ${s.id}: ${s.bin} [${s.extensions.join(", ")}]`);
-        pi.sendMessage({ customType: "lsp-list", content: `**LSP Servers**\n\n${lines.join("\n")}`, display: true });
+        pi.sendMessage({ customType: "postwrite-lsp-list", content: `**LSP Servers**\n\n${lines.join("\n")}`, display: true });
       } else {
-        ctx.ui.notify("Usage: /lsp add <id> <bin> <.ext> [...] | /lsp list", "info");
+        ctx.ui.notify("Usage: /postwrite lsp add <id> <bin> <.ext> [...] | /postwrite lsp list", "info");
       }
     },
   });
 
+  // ---- main hook: format → diagnose (write + edit) ----
   pi.on("tool_call", async (event) => {
-    if (event.toolName !== "write") return;
-    const path = (event.input as any)?.path;
-    if (!path || typeof path !== "string") return;
-    const content = (event.input as any)?.content;
-    if (typeof content !== "string" || !content) return;
+    if (event.toolName !== "write" && event.toolName !== "edit") return;
 
+    const path = (event.input as any)?.path || (event.input as any)?.file_path;
+    if (!path || typeof path !== "string") return;
+
+    const root = findRoot(path);
+    const fmt = findFormatter(path, root);
+
+    // Step 1: Format the file on disk (if formatter configured + available)
+    if (fmt && which(fmt.bin)) {
+      try {
+        execSync(`${fmt.bin} ${fmt.args.join(" ")} "${path}"`, {
+          cwd: root, stdio: "pipe", timeout: 10000,
+        });
+      } catch {
+        // Format failed, probably syntax error - continue to LSP anyway
+      }
+    }
+
+    // Step 2: Read the (potentially formatted) file from disk so LSP
+    //         line numbers match reality
+    let fileContent = "";
+    try { fileContent = readFileSync(path, "utf-8"); } catch { return; }
+
+    // Step 3: LSP diagnostics on the actual file content
     const client = getClient(path);
     if (!client) return;
 
     try {
-      const diags = await client.diagnostics(path, content);
+      const diags = await client.diagnostics(path, fileContent);
+
+      const fmtNote = fmt ? ` + ${fmt.bin}` : "";
       if (diags.length === 0) {
-        return { appendResult: { content: [{ type: "text", text: "\n── LSP ──\n✅ No issues." }] } };
+        return {
+          appendResult: { content: [{ type: "text", text: `\n✓ postwrite${fmtNote}\n── LSP ──\n✅ No issues.` }] },
+        };
       }
       const lines = diags.map((d: any) => {
         const sev = d.severity === 1 ? "❌" : d.severity === 2 ? "⚠️" : "ℹ️";
         return `${sev} L${d.range.start.line + 1}:${d.range.start.character + 1} — ${d.message}`;
       });
-      return { appendResult: { content: [{ type: "text", text: `\n── LSP ──\n${lines.join("\n")}` }] } };
+      return {
+        appendResult: { content: [{ type: "text", text: `\n✓ postwrite${fmtNote}\n── LSP ──\n${lines.join("\n")}` }] },
+      };
     } catch {
-      return { appendResult: { content: [{ type: "text", text: "\n── LSP ──\n⚠️ No diagnostics available." }] } };
+      return {
+        appendResult: { content: [{ type: "text", text: `\n✓ postwrite${fmtNote}\n── LSP ──\n⚠️ No diagnostics available.` }] },
+      };
     }
   });
 
+  // ---- cleanup ----
   pi.on("session_shutdown", () => {
     for (const c of clients.values()) c.shutdown();
     clients.clear();

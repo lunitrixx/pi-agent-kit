@@ -15,6 +15,7 @@
   - /permit migrate: converts old lntrx-guard.risks.* keys to bash rules
 - lntrx-githooks: git hook management extracted from lntrx-guard (filesystem-level,
   works for manual commits too). /githooks command replaces /guard-hook.
+- lntrx-postwrite: merged lntrx-fmt + lntrx-lsp. Formats, then diagnoses on both write and edit.
 - `/memory prune [--dry-run]` — removes corrections older than 90 days and closed
   bugs older than 30 days. Dry-run mode shows what would be removed.
 - Automatic memory aging: stale corrections and closed bugs pruned on `session_start`.
@@ -32,6 +33,17 @@
   disabled, reducing first-turn token overhead by ~90%. Set to `"inject"` for old behavior.
 - Correction detection no longer blindly creates bugs. Only error-like patterns
   trigger a bug entry. "Auto-detected - needs review" placeholder removed.
+- Configuration library moved from `extensions/lntrx-config/` to `lib/config.ts` (no longer an extension)
+- `/health` now uses `scanAnatomy()` (respects `.gitignore`) and includes model info, context window, and session cost
+- Removed `/health` deps section (use `dep-update` skill instead)
+
+### Removed
+
+- lntrx-guard extension (replaced by lntrx-permit + lntrx-githooks)
+- lntrx-config extension (became `lib/config.ts`, web-search auto-provisioning dropped)
+- lntrx-context extension (`/ctx` removed; model+window+cost moved to `/health`)
+- lntrx-fmt extension (merged into `lntrx-postwrite`)
+- lntrx-lsp extension (merged into `lntrx-postwrite`)
 
 ## 0.3.0 - 2026-06-28
 

@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder } from "@earendil-works/pi-coding-agent";
 import { Container, SelectList, Text, Spacer } from "@earendil-works/pi-tui";
-import { get, set } from "../../lntrx-config/src/config";
+import { get, set } from "../../../lib/config";
 
 const NS = "lntrx-localmodels";
 
