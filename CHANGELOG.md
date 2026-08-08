@@ -15,12 +15,23 @@
   - /permit migrate: converts old lntrx-guard.risks.* keys to bash rules
 - lntrx-githooks: git hook management extracted from lntrx-guard (filesystem-level,
   works for manual commits too). /githooks command replaces /guard-hook.
+- `/memory prune [--dry-run]` — removes corrections older than 90 days and closed
+  bugs older than 30 days. Dry-run mode shows what would be removed.
+- Automatic memory aging: stale corrections and closed bugs pruned on `session_start`.
+- Secret redaction in memory: `save()` and `saveBug()` strip known secret patterns
+  before writing to the database.
+- Memory flush hooks: WAL checkpoint on `session_before_compact` and `session_shutdown`.
+- Optional review loop: `lntrx-memory.reviewInterval` for periodic `/memory scan` nudges.
 
 ### Changed
 
 - Replaced lntrx-guard with lntrx-permit + lntrx-githooks
 - /safety command removed (use /permit status)
 - /guard-hook command removed (use /githooks)
+- lntrx-memory defaults to `memoryMode: "policy"` — auto-injected search results
+  disabled, reducing first-turn token overhead by ~90%. Set to `"inject"` for old behavior.
+- Correction detection no longer blindly creates bugs. Only error-like patterns
+  trigger a bug entry. "Auto-detected - needs review" placeholder removed.
 
 ## 0.3.0 - 2026-06-28
 

@@ -14,6 +14,7 @@ export interface CmdCtx {
   sqliteLoadError: string | null;
   ensureDb(): import("./db.js").SqliteDB | null;
   checkpoint(): void;
+  memoryMode(): "policy" | "inject";
   search(query: string, limit: number, scope: "project" | "global" | "all"): Entry[];
   save(args: {
     headline: string;
@@ -26,11 +27,13 @@ export interface CmdCtx {
   listBugs(project: string): Bug[];
   scanAnatomy(root: string): ReturnType<typeof import("./scanner.js").scanAnatomy>;
   anatomyToMarkdown(root: string, result: ReturnType<typeof import("./scanner.js").scanAnatomy>): string;
+  pruneStale(): { entries: number; bugs: number };
+  prunePreview(): { entries: { id: number; created: number; headline: string }[]; bugs: { id: number; created: number; symptom: string }[] };
 }
 
 export function registerCommands(pi: ExtensionAPI, ctx: CmdCtx) {
   pi.registerCommand("memory", {
-    description: "Memory: list|search|learn|forget|forget all|scan|bug|bugs|health [<args>]",
+    description: "Memory: list|search|learn|forget|scan|bug|bugs|health|prune [<args>]",
     handler: async (args, c) => {
       const parts = args.trim().split(/\s+/);
       const sub = parts[0];
@@ -173,7 +176,48 @@ export function registerCommands(pi: ExtensionAPI, ctx: CmdCtx) {
         return;
       }
 
-      c.ui.notify("/memory list|search|learn|forget <id|all>|scan|bug add|fix|close|delete|bugs|health", "info");
+      // ---- prune ----
+      if (sub === "prune") {
+        const dryRun = parts.includes("--dry-run");
+        if (dryRun) {
+          const preview = ctx.prunePreview();
+          const lines: string[] = ["Would prune:", ""];
+          if (preview.entries.length > 0) {
+            lines.push(`${preview.entries.length} old corrections (>90 days):`);
+            for (const e of preview.entries.slice(0, 5)) {
+              const when = new Date(e.created * 1000).toISOString().slice(0, 10);
+              lines.push(`  #${e.id} ${when} ${e.headline.slice(0, 60)}`);
+            }
+            if (preview.entries.length > 5) lines.push(`  ... and ${preview.entries.length - 5} more`);
+          }
+          if (preview.bugs.length > 0) {
+            if (preview.entries.length > 0) lines.push("");
+            lines.push(`${preview.bugs.length} closed bugs (>30 days):`);
+            for (const b of preview.bugs.slice(0, 5)) {
+              const when = new Date(b.created * 1000).toISOString().slice(0, 10);
+              lines.push(`  #${b.id} ${when} ${b.symptom.slice(0, 60)}`);
+            }
+            if (preview.bugs.length > 5) lines.push(`  ... and ${preview.bugs.length - 5} more`);
+          }
+          if (preview.entries.length === 0 && preview.bugs.length === 0) {
+            lines.push("Nothing to prune.");
+          }
+          lines.push("", "Run /memory prune to execute.");
+          c.ui.notify(lines.join("\n"), "info");
+        } else {
+          const pruned = ctx.pruneStale();
+          const parts2: string[] = [];
+          if (pruned.entries > 0) parts2.push(`${pruned.entries} old corrections`);
+          if (pruned.bugs > 0) parts2.push(`${pruned.bugs} closed bugs`);
+          c.ui.notify(
+            parts2.length > 0 ? `Pruned ${parts2.join(" and ")}.` : "Nothing to prune.",
+            parts2.length > 0 ? "success" : "info"
+          );
+        }
+        return;
+      }
+
+      c.ui.notify("/memory list|search|learn|forget <id|all>|scan|bug add|fix|close|delete|bugs|health|prune [--dry-run]", "info");
     },
   });
 }

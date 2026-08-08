@@ -20,7 +20,7 @@ pi install npm:@lunitrixx/pi-agent-kit
 | `lntrx-health` | `/health` — codebase health: TODOs, large files, model/cost summary |
 | `lntrx-localmodels` | Local LLM endpoint manager (`/local-models`) |
 | `lntrx-postwrite` | Auto-format + LSP diagnostics on write/edit (merged from lntrx-fmt + lntrx-lsp) |
-| `lntrx-memory` | Cross-session SQLite memory with FTS5 search, anatomy scanning, bug tracking |
+| `lntrx-memory` | Cross-session SQLite memory (v2): policy-mode, FTS5 search, anatomy scanning, bug tracking, auto-aging |
 | `lntrx-project-rules` | Inject `.pi/rules/` into system prompt + banner widget |
 
 ### Skills (15)
@@ -28,21 +28,21 @@ Auto-detected by Pi from your prompt.
 
 | Skill | Triggers on |
 |---|---|
+| `changelog` | "update changelog" |
+| `commit` | "write a commit message" |
+| `debug` | "fix this bug" |
+| `dep-update` | "update dependencies" |
+| `docs-gen` | "write documentation" |
+| `extend-pi` | "build an extension" |
 | `grill-me` | "roast this", "review this code" |
 | `merge-pr` | "merge PR 81" |
-| `project-onboarding` | "what does this project do" |
-| `commit` | "write a commit message" |
-| `changelog` | "update changelog" |
+| `pi-project-setup` | "initialize a project", "scaffold", "migrate to AGENTS.md" |
 | `pr` | "write a PR description" |
-| `debug` | "fix this bug" |
+| `project-onboarding` | "what does this project do" |
+| `readme` | "generate README" |
 | `refactor` | "clean up this code" |
 | `test` | "add tests for" |
-| `readme` | "generate README" |
-| `docs-gen` | "write documentation" |
-| `dep-update` | "update dependencies" |
-| `extend-pi` | "build an extension" |
 | `version-management` | "bump version", "release" |
-| `pi-project-setup` | "initialize a project", "scaffold", "migrate to AGENTS.md" |
 
 ### Agents
 Install `pi-subagents` for the `subagent` tool (see companion packages above).

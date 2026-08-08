@@ -177,3 +177,11 @@ export function isCorrection(text: string): boolean {
   return /\b(no|nein|falsch|wrong|incorrect|don'?t|nicht|stop)\b.*\b(use|do|nimm|mach|try|versuch|should|solltest)\b/i.test(text)
     || /\b(actually|eigentlich|rather|vielmehr|stattdessen|instead)\b/i.test(text);
 }
+
+/**
+ * Check if a correction message indicates an actual bug (not just a preference).
+ * Matches error-like language: broken, bug, crash, fail, doesn't work, etc.
+ */
+export function hasErrorPattern(text: string): boolean {
+  return /\b(broken|kaputt|bug|crash|absturz|fail|fehler|error|doesn'?t work|funktioniert nicht|does not work|wrong output|falsche ausgabe|breaks|zerstört|kaputt macht|regression|kaputtgegangen|geht nicht mehr)\b/i.test(text);
+}
