@@ -82,9 +82,7 @@ export default function (pi: ExtensionAPI) {
     yolo = !!pi.getFlag("yolo");
     yoloWarned = false;
 
-    // Load persisted session approvals
-    const approvals = pi.getEntry("permit-approvals");
-    if (approvals) loadApprovals(approvals);
+    // Session approvals start fresh — pi.getEntry not available in current API
 
     // If YOLO mode, show warning once in the header
     if (yolo) {
