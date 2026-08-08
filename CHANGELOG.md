@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-08-08
+
 ### Added
 
 - lntrx-permit: new permission system with shell tokenizer, 4 permission surfaces
