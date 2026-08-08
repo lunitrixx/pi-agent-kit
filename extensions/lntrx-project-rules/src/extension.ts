@@ -3,7 +3,7 @@ import { DynamicBorder } from "@earendil-works/pi-coding-agent";
 import { Container, Text } from "@earendil-works/pi-tui";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { get as configGet, set as configSet, getProject, setProject } from "../../lntrx-config/src/config";
+import { get as configGet, set as configSet, getProject, setProject } from "../../../lib/config";
 
 // ---------------------------------------------------------------------------
 // Helpers

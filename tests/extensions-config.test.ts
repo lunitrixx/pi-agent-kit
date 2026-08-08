@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 // ---------------------------------------------------------------------------
-// Inline config implementation (mirrors lntrx-config/src/config.ts)
+// Inline config implementation (mirrors lib/config.ts)
 // ---------------------------------------------------------------------------
 
 let globalFile: string;

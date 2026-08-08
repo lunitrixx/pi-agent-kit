@@ -31,17 +31,14 @@
       "extensions/lntrx-header",
       "extensions/lntrx-lang",
       "extensions/lntrx-grill-me",
-      "extensions/lntrx-config",
       "extensions/lntrx-footer",
       "extensions/lntrx-permit",
       "extensions/lntrx-githooks",
       "extensions/lntrx-health",
-      "extensions/lntrx-context",
       "extensions/lntrx-localmodels",
-      "extensions/lntrx-lsp",
-      "extensions/lntrx-fmt",
       "extensions/lntrx-memory",
-      "extensions/lntrx-project-rules"
+"extensions/lntrx-project-rules",
+      "extensions/lntrx-postwrite"
     ],
     "skills": [
       "skills"

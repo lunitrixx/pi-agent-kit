@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { get, set, getProject, setProject } from "../../lntrx-config/src/config";
+import { get, set, getProject, setProject } from "../../../lib/config";
 
 const NS = "lntrx-lang";
 
