@@ -73,11 +73,30 @@ function removeHook(repoPath: string, hook: HookDef): boolean {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Extension
-// ---------------------------------------------------------------------------
+// ---- Block git commit on main at the tool-call level (saves agent time) ----
+  pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName !== "bash") return;
+    const cmd: string | undefined = (event.input as any)?.command;
+    if (!cmd) return;
+    // Match git commit (but not --allow-empty alone, not commit --amend, not commit -m "merge")
+    if (!/\bgit\s+commit\b/.test(cmd) || /--allow-empty/.test(cmd)) return;
+    try {
+      const branch = execSync("git branch --show-current", {
+        encoding: "utf-8",
+        cwd: ctx.cwd,
+      }).trim();
+      if (branch === "main") {
+        return {
+          block: true,
+          reason:
+            "Direct commits to main are blocked. Create a branch (feat/..., fix/...) and submit a PR. Bypass with git commit --no-verify.",
+        };
+      }
+    } catch {
+      // not a git repo — skip
+    }
+  });
 
-export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     for (const hook of HOOKS) {
       if (!hookEnabled(ctx.cwd, hook)) {

@@ -27,3 +27,6 @@ Thumbs.db
 *.db-shm
 *.db-wal
 *.db-wal2
+
+# Pi subagent artifacts
+.pi-subagents/
