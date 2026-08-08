@@ -39,50 +39,50 @@ the kit live in `skills/`. Pi loads them via the `"pi.skills"` field in
 `package.json`.
 
 Bundled skills:
+- `changelog` — Write or update a changelog from git history
+- `commit` — Write a conventional commit message from staged changes
+- `debug` — Systematic debugging workflow
+- `dep-update` — Check and update dependencies across any package manager
+- `docs-gen` — Generate proper documentation site under docs/
+- `extend-pi` — Decide and create the right Pi extension, skill, or agent
 - `grill-me` — Harsh code review with severity levels
 - `merge-pr` — Squash-merge GitHub PRs and clean up branches
+- `pi-project-setup` — Bootstrap a new project to the Pi-native agent-config pattern
+- `pr` — Write a pull request description from branch changes
 - `project-onboarding` — Analyze unfamiliar codebases systematically
-- `scratchpad` — Persistent TODO list across sessions via lntrx-memory
-- `commit` — Generate conventional commit messages from staged changes
-- `changelog` — Write changelog entries from git history
-- `pr` — Generate pull request descriptions from branch changes
-- `debug` — Systematic debugging workflow
+- `readme` — Generate or update project README.md
 - `refactor` — Systematic refactoring with safety net
 - `test` — Write unit and integration tests for existing code
-- `readme` — Generate or update project README.md
-- `docs-gen` — Generate proper documentation site under docs/
-- `dep-update` — Check and update dependencies across any package manager
-- `extend-pi` — Decide and create the right Pi extension, skill, or agent
-- `librarian` — Research open-source libraries with evidence-backed answers (from pi-web-access)
+- `version-management` — Bump version, write changelogs, and create git tags
 
 ## Agents
 
-Subagent definitions live in `agents/`. Each is a Markdown file with YAML
-frontmatter specifying name, tools, and model.
-
-- `review` — Code review specialist (read-only)
-- `plan` — Creates bite-sized implementation plans
-- `build` — General-purpose implementation agent
-
-## Prompts
-
-Prompt templates live in `prompts/`. Use with `/prompt:<name>`.
-
-- `commit` — Conventional commit message
-- `changelog` — Changelog entry
-- `pr` — Pull request description
-- `refactor` — Systematic refactoring workflow
+This kit does not ship its own agent definitions. Subagents (`review`, `plan`,
+`build`) are provided by the `pi-subagents` dependency and loaded at runtime.
 
 ## Shared memory (lntrx-memory)
 
-This project uses lntrx-memory for cross-session memory. Memory files are plain
-Markdown/JSON — **every agent should consult them**:
+This project uses lntrx-memory for cross-session recall. Memory is stored in a
+SQLite database with FTS5 full-text search — **every agent should consult it**:
 
-- `.pi/memory/cerebrum.md` — learned conventions, preferences, and corrections
-- `.pi/memory/anatomy.md` — project file map with token estimates
-- `.pi/memory/buglog.json` — known bugs and their fixes
-- `.pi/memory/scratch.md` — persistent TODO checklist
-- `.pi/memory/daily/` — daily work log
+- **DB path:** `~/.pi/memory.db` (override with `LNTRX_MEMORY_DB`)
+- **Backend:** `node:sqlite` (Node 24+, no native dependencies)
 
-Use `/memory show`, `/memory scan`, `lntrx_memory_search`, and
-`lntrx_memory_learn` to interact with memory.
+### Tools
+
+- `lntrx_memory_search(query, limit?, scope?)` — Search by keyword (FTS5)
+- `lntrx_memory_learn(headline, detail?, category?, labels?, scope?, id?)` — Save or update
+- `lntrx_memory_forget(id, table?)` — Delete an entry or bug
+- `lntrx_memory_scan()` — Scan project anatomy
+- `lntrx_memory_bug(symptom, solution?, state?, id?)` — Track or update a bug
+
+### Commands
+
+- `/memory list [N]` — Recent entries
+- `/memory search <query>` — Full-text search
+- `/memory learn <text>` — Quick save
+- `/memory forget <id|all> [bug]` — Delete entries
+- `/memory scan` — Rescan anatomy
+- `/memory bug add|fix|close|delete` — Bug management
+- `/memory bugs` — List open bugs
+- `/memory health` — DB stats
