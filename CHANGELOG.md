@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- lntrx-permit: new permission system with shell tokenizer, 4 permission surfaces
+  (path, external_directory, tool, bash), most-restrictive-wins evaluation, and
+  fail-closed defaults. Replaces lntrx-guard's regex-based approach.
+  - Shell tokenizer normalizes short flags to long form (rm -rf → rm --recursive --force)
+  - Path surface blocks reads AND writes (cat .env is now caught)
+  - --yolo CLI flag for bypassing all checks during trusted sessions
+  - Session approvals: grant once or for the duration of the session
+  - Secret redaction on tool_results instead of write blocking
+  - /permit migrate: converts old lntrx-guard.risks.* keys to bash rules
+- lntrx-githooks: git hook management extracted from lntrx-guard (filesystem-level,
+  works for manual commits too). /githooks command replaces /guard-hook.
+
+### Changed
+
+- Replaced lntrx-guard with lntrx-permit + lntrx-githooks
+- /safety command removed (use /permit status)
+- /guard-hook command removed (use /githooks)
+
 ## 0.3.0 - 2026-06-28
 
 ### Added
