@@ -3,9 +3,8 @@
  *
  * Run: npx tsx extensions/lntrx-subagent-audit/tests/audit.test.ts
  *
- * Writes into a temporary directory via LNTRX_SUBAGENT_AUDIT_FILE and
- * LNTRX_SUBAGENT_HISTORY_FILE; the real files under ~/.pi/agent are never
- * touched.
+ * Writes into a temporary directory via LNTRX_SUBAGENT_AUDIT_FILE; the real
+ * file under ~/.pi/agent is never touched.
  */
 import { strict as assert } from "node:assert";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -14,12 +13,9 @@ import { join } from "node:path";
 
 const workDir = mkdtempSync(join(tmpdir(), "lntrx-subagent-audit-"));
 process.env.LNTRX_SUBAGENT_AUDIT_FILE = join(workDir, "audit.jsonl");
-process.env.LNTRX_SUBAGENT_HISTORY_FILE = join(workDir, "run-history.jsonl");
 
 const { auditPath, formatAudit, readAudit, readRunMeta, recordAudit } = await import("../src/audit.js");
-const { detachedFailureNotice, newFailures, parseHistory, readHistory, seedSeen } = await import(
-  "../src/history.js"
-);
+const { detachedFailureNotice, findFailedRuns, runIdFromMetaName } = await import("../src/runs.js");
 
 let passed = 0;
 let failed = 0;
@@ -143,67 +139,79 @@ test("an unknown run id yields nothing", () => {
   eq(readRunMeta(join(workDir, "repo"), "deadbeef"), undefined);
 });
 
-// ---------------------------------------------------------------------------
-// The detached failures, straight from run-history.jsonl
-// ---------------------------------------------------------------------------
-
-const REAL_HISTORY = [
-  '{"agent":"reviewer","task":"[redacted]","taskHash":"9cde","ts":1786347480,"status":"ok","duration":199065}',
-  '{"agent":"reviewer","task":"[redacted]","taskHash":"1ddf","ts":1786347745,"status":"error","duration":1687,"exit":1}',
-  '{"agent":"reviewer","task":"[redacted]","taskHash":"13e4","ts":1786347852,"status":"error","duration":119939,"exit":143}',
-].join("\n");
-
-test("parses the real history format", () => {
-  const entries = parseHistory(REAL_HISTORY);
-  eq(entries.length, 3);
-  eq(entries[1]!.exit, 1);
-});
-
-test("skips lines that are not run entries", () => {
-  eq(parseHistory('{"nope":1}\n{"agent":"x","ts":1,"status":"weird","duration":0}\n').length, 0);
-});
-
-test("only the failures come back, and only once", () => {
-  const entries = parseHistory(REAL_HISTORY);
-  const seen = new Set<string>();
-  const first = newFailures(entries, seen);
-  eq(first.length, 2);
-  eq(newFailures(entries, seen).length, 0);
-});
-
-test("failures already on disk at session start stay quiet", () => {
-  const entries = parseHistory(REAL_HISTORY);
-  eq(newFailures(entries, seedSeen(entries)).length, 0);
-});
-
-test("a failure appended after session start is reported", () => {
-  const entries = parseHistory(REAL_HISTORY);
-  const seen = seedSeen(entries);
-  const later = parseHistory(
-    `${REAL_HISTORY}\n{"agent":"reviewer","task":"[redacted]","taskHash":"d63e","ts":1786347989,"status":"error","duration":786,"exit":1}`,
+test("in a parallel run it reads the agent that failed, not a sibling that passed", () => {
+  const repo = join(workDir, "parallel");
+  const dir = join(repo, ".pi-subagents", "artifacts");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "abc123_planner_0_meta.json"),
+    JSON.stringify({ agent: "planner", exitCode: 0, model: "deepseek-v4-flash" }),
   );
-  const fresh = newFailures(later, seen);
-  eq(fresh.length, 1);
-  eq(fresh[0]!.duration, 786);
+  writeFileSync(
+    join(dir, "abc123_reviewer_1_meta.json"),
+    JSON.stringify({ agent: "reviewer", exitCode: 1, model: "anthropic/claude-sonnet-4", error: "No API key found for anthropic." }),
+  );
+  // Without a name, the failing sibling wins - recording exit 0 for a failed
+  // run would defeat the point of the record.
+  eq(readRunMeta(repo, "abc123")?.exitCode, 1);
+  // With a name, that agent's own record wins.
+  eq(readRunMeta(repo, "abc123", "planner")?.exitCode, 0);
+  eq(readRunMeta(repo, "abc123", "reviewer")?.agent, "reviewer");
 });
 
-test("history reads through the environment override", () => {
-  writeFileSync(process.env.LNTRX_SUBAGENT_HISTORY_FILE!, REAL_HISTORY);
-  eq(readHistory().length, 3);
+// ---------------------------------------------------------------------------
+// The detached failures, found per repository rather than machine-wide
+// ---------------------------------------------------------------------------
+
+test("a run id is read off the metadata file name", () => {
+  eq(runIdFromMetaName("4a11f660_reviewer_0_meta.json"), "4a11f660");
+  eq(runIdFromMetaName("4a11f660_reviewer_0_transcript.jsonl"), undefined);
 });
 
-test("a missing history file reads as empty", () => {
-  rmSync(process.env.LNTRX_SUBAGENT_HISTORY_FILE!, { force: true });
-  eq(readHistory().length, 0);
+test("only failed runs come back, and only from this repository", () => {
+  const repo = join(workDir, "sweep");
+  const dir = join(repo, ".pi-subagents", "artifacts");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "aaa_reviewer_0_meta.json"),
+    JSON.stringify({ agent: "reviewer", exitCode: 0, durationMs: 199065 }),
+  );
+  writeFileSync(
+    join(dir, "bbb_reviewer_0_meta.json"),
+    JSON.stringify({
+      agent: "reviewer",
+      exitCode: 1,
+      durationMs: 1687,
+      model: "anthropic/claude-sonnet-4:high",
+      error: "No API key found for anthropic.",
+    }),
+  );
+  const failures = findFailedRuns(repo, 0);
+  eq(failures.length, 1);
+  eq(failures[0]!.runId, "bbb");
+  eq(failures[0]!.exitCode, 1);
+  // Another worktree's failures are not this session's business.
+  eq(findFailedRuns(join(workDir, "other-worktree"), 0).length, 0);
 });
 
-test("the detached notice states the work did not happen", () => {
-  const notice = detachedFailureNotice(parseHistory(REAL_HISTORY).filter((e) => e.status === "error"));
-  ok(notice.includes("2 subagent runs failed"));
-  ok(notice.includes("exit 143"));
+test("runs that finished before the session started stay quiet", () => {
+  const future = Math.floor(Date.now() / 1000) + 3600;
+  eq(findFailedRuns(join(workDir, "sweep"), future).length, 0);
+});
+
+test("a repository with no artifacts directory yields nothing", () => {
+  eq(findFailedRuns(join(workDir, "nowhere"), 0).length, 0);
+});
+
+test("the detached notice states the work did not happen and names the error", () => {
+  const notice = detachedFailureNotice(findFailedRuns(join(workDir, "sweep"), 0));
+  ok(notice.includes("1 subagent run failed"));
+  ok(notice.includes("exit 1"));
+  ok(notice.includes("No API key found for anthropic."));
   ok(notice.includes("did not happen"));
   ok(notice.includes("/subagent-audit"));
 });
+
 
 console.log(`\n  ${passed} passed, ${failed} failed`);
 rmSync(workDir, { recursive: true, force: true });

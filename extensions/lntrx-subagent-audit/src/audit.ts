@@ -13,12 +13,22 @@
  * code and the error text itself.
  */
 
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 /** Keep an entry diagnosable without letting one stack trace fill the file. */
 const MAX_ERROR_CHARS = 4000;
+const ROTATE_SIZE_BYTES = 2_000_000;
+const ROTATE_KEEP = 500;
 const PRIVATE_DIR_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
 
@@ -67,8 +77,28 @@ export function recordAudit(entry: AuditEntry): void {
       encoding: "utf-8",
       mode: PRIVATE_FILE_MODE,
     });
+    rotate(path);
   } catch {
     // Best effort, exactly like pi-subagents' own history writer.
+  }
+}
+
+/**
+ * Keep the newest ROTATE_KEEP records once the file passes the threshold. Full
+ * error texts are much larger than a run-history line, so this file would
+ * otherwise grow without bound and `/subagent-audit` would read all of it.
+ */
+function rotate(path: string): void {
+  try {
+    if (statSync(path).size < ROTATE_SIZE_BYTES) return;
+    const lines = readFileSync(path, "utf-8").split("\n").filter((line) => line.trim());
+    if (lines.length <= ROTATE_KEEP) return;
+    writeFileSync(path, `${lines.slice(-ROTATE_KEEP).join("\n")}\n`, {
+      encoding: "utf-8",
+      mode: PRIVATE_FILE_MODE,
+    });
+  } catch {
+    // A file that cannot be rotated is still a usable log.
   }
 }
 
@@ -95,6 +125,15 @@ export function readAudit(limit = 20): AuditEntry[] {
   return entries.reverse().slice(0, limit);
 }
 
+function hasNonZeroExit(path: string): boolean {
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf-8")) as { exitCode?: unknown };
+    return typeof raw.exitCode === "number" && raw.exitCode !== 0;
+  } catch {
+    return false;
+  }
+}
+
 /** The subset of a pi-subagents run metadata file worth keeping. */
 export interface RunMeta {
   agent?: string;
@@ -114,7 +153,7 @@ export interface RunMeta {
  * it is lifted into the audit line so the next occurrence needs one file, not
  * two.
  */
-export function readRunMeta(cwd: string, runId: string): RunMeta | undefined {
+export function readRunMeta(cwd: string, runId: string, agent?: string): RunMeta | undefined {
   if (!cwd || !runId) return undefined;
   const dir = join(cwd, ".pi-subagents", "artifacts");
   let names: string[];
@@ -123,10 +162,17 @@ export function readRunMeta(cwd: string, runId: string): RunMeta | undefined {
   } catch {
     return undefined;
   }
-  const match = names.find(
+  const candidates = names.filter(
     (name) => name.startsWith(`${runId}_`) && name.endsWith("_meta.json"),
   );
-  if (!match) return undefined;
+  if (candidates.length === 0) return undefined;
+  // A parallel run writes one file per agent. Take the named agent's when we
+  // know which one failed; otherwise the failing one, because recording a
+  // sibling's `exit 0` for a failed run defeats the point of the record.
+  const match =
+    (agent ? candidates.find((name) => name.startsWith(`${runId}_${agent}_`)) : undefined) ??
+    candidates.find((name) => hasNonZeroExit(join(dir, name))) ??
+    candidates[0]!;
   try {
     const raw = JSON.parse(readFileSync(join(dir, match), "utf-8")) as Record<string, unknown>;
     return {

@@ -9,14 +9,12 @@
  * caller cannot come away from any of them believing a review happened.
  */
 import { strict as assert } from "node:assert";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const workDir = mkdtempSync(join(tmpdir(), "lntrx-subagent-ext-"));
-const historyFile = join(workDir, "run-history.jsonl");
 process.env.LNTRX_SUBAGENT_AUDIT_FILE = join(workDir, "audit.jsonl");
-process.env.LNTRX_SUBAGENT_HISTORY_FILE = historyFile;
 
 const createExtension = (await import("../src/extension.js")).default;
 const { readAudit } = await import("../src/audit.js");
@@ -40,7 +38,7 @@ function ok(v: any, msg?: string) { assert.ok(v, msg); }
 
 interface Sent { content: string; options: any }
 
-function buildHarness() {
+function buildHarness(cwd: string = workDir) {
   const handlers = new Map<string, Function[]>();
   const sent: Sent[] = [];
   const notified: string[] = [];
@@ -58,7 +56,7 @@ function buildHarness() {
   };
 
   const ctx = {
-    cwd: workDir,
+    cwd,
     // This machine on 2026-08-10: OpenRouter credentials and nothing else.
     model: { provider: "openrouter", id: "deepseek/deepseek-v4-pro" },
     modelRegistry: {
@@ -220,36 +218,65 @@ await test("a result already marked as an error is not decorated twice", async (
 // 4. The detached failure that never became a tool result at all
 // ---------------------------------------------------------------------------
 
+/** Each sweep test gets its own repository, exactly as parallel worktrees do. */
+function writeMeta(cwd: string, runId: string, agent: string, meta: Record<string, unknown>): void {
+  const dir = join(cwd, ".pi-subagents", "artifacts");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${runId}_${agent}_0_meta.json`), JSON.stringify({ agent, ...meta }));
+}
+
 await test("a detached failure reaches the caller as a follow-up it must address", async () => {
-  writeFileSync(
-    historyFile,
-    '{"agent":"reviewer","task":"[redacted]","ts":1786347480,"status":"ok","duration":199065}\n',
-  );
-  const h = buildHarness();
+  const repo = join(workDir, "detached");
+  const h = buildHarness(repo);
   await h.fire("session_start", {});
 
-  // Nothing new yet: the run that was already on disk stays quiet.
+  // A run that succeeded says nothing.
+  writeMeta(repo, "aaa", "reviewer", { exitCode: 0, durationMs: 199065 });
   await h.fire("agent_settled", {});
   eq(h.sent.length, 0);
 
   // The detached reviewer dies while the caller is busy elsewhere.
-  writeFileSync(
-    historyFile,
-    '{"agent":"reviewer","task":"[redacted]","ts":1786347480,"status":"ok","duration":199065}\n' +
-      '{"agent":"reviewer","task":"[redacted]","ts":1786347745,"status":"error","duration":1687,"exit":1}\n',
-  );
+  writeMeta(repo, "bbb", "reviewer", {
+    exitCode: 1,
+    durationMs: 1687,
+    model: "anthropic/claude-sonnet-4:high",
+    error: "No API key found for anthropic.",
+  });
   await h.fire("agent_settled", {});
 
   eq(h.sent.length, 1);
   ok(h.sent[0]!.content.includes("1 subagent run failed"), h.sent[0]!.content);
+  ok(h.sent[0]!.content.includes("No API key found for anthropic."), h.sent[0]!.content);
   ok(h.sent[0]!.content.includes("did not happen"));
   // followUp + triggerTurn is what makes it a turn the agent has to take.
   eq(h.sent[0]!.options.deliverAs, "followUp");
   eq(h.sent[0]!.options.triggerTurn, true);
 
-  // And it is announced once, not on every settle after it.
+  // And it is announced once, not on every settle after it - which is also what
+  // stops the triggered turn from finding the same failure again.
   await h.fire("agent_settled", {});
   eq(h.sent.length, 1);
+});
+
+await test("a failure already returned as a tool error is not announced a second time", async () => {
+  const repo = join(workDir, "attached");
+  const h = buildHarness(repo);
+  await h.fire("session_start", {});
+  writeMeta(repo, "ccc", "reviewer", { exitCode: 1, error: "No API key found for anthropic." });
+
+  // The attached run comes back through the gate first.
+  const patch = await h.fire("tool_result", {
+    toolName: "subagent",
+    input: { agent: "reviewer" },
+    isError: false,
+    details: { runId: "ccc" },
+    content: [{ type: "text", text: "1. reviewer failed, exit 1, acceptance: rejected" }],
+  });
+  eq(patch?.isError, true);
+
+  // The sweep must not then claim it was never handed to the caller.
+  await h.fire("agent_settled", {});
+  eq(h.sent.length, 0);
 });
 
 console.log(`\n  ${passed} passed, ${failed} failed`);

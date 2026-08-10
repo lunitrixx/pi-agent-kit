@@ -18,8 +18,12 @@
     still returns `isError: false`. Such a result now comes back as a tool error
     headed "SUBAGENT RUN FAILED - THIS TOOL CALL DID NOT PRODUCE A RESULT".
   - **Detached sweep.** Three of the four runs were detached, and their failure
-    arrived as a display-only notice the caller had no obligation to read. New
-    failures in `run-history.jsonl` are now delivered as a follow-up turn.
+    arrived as a display-only notice the caller had no obligation to read. A
+    failed run in this repository's `.pi-subagents/artifacts/` that never came
+    back as a tool result is now delivered as a follow-up turn. Deliberately not
+    read from `run-history.jsonl`: that file is machine-global and its entries
+    carry no cwd, so with parallel worktree agents every session would be handed
+    every other session's failures.
   - **`~/.pi/agent/subagent-audit.jsonl`** and `/subagent-audit`. `run-history`
     records `status: "error"` and nothing else; the audit carries the model
     asked for, the model tried, the exit code and the error text.

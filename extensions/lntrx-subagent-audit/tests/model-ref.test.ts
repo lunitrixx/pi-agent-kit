@@ -116,6 +116,22 @@ test("an empty reference means no opinion", () => {
   eq(verifyModelRef("", AVAILABLE, "openrouter").kind, "ok");
 });
 
+test("a reachable provider wins over an id that happens to spell it", () => {
+  // With anthropic credentials configured, "anthropic/claude-sonnet-4" is a
+  // provider-qualified anthropic reference. Rewriting it to the OpenRouter
+  // model of the same name would move the run to another vendor and another
+  // bill behind the caller's back.
+  const both: ModelEntry[] = [
+    { provider: "anthropic", id: "claude-sonnet-4-5" },
+    { provider: "openrouter", id: "anthropic/claude-sonnet-4" },
+  ];
+  eq(verifyModelRef("anthropic/claude-sonnet-4", both, "openrouter").kind, "ok");
+});
+
+test("without those credentials the same reference is still corrected", () => {
+  eq(verifyModelRef("anthropic/claude-sonnet-4", AVAILABLE, "openrouter").kind, "rewrite");
+});
+
 test("a provider with several matching ids prefers the session provider", () => {
   const models: ModelEntry[] = [
     { provider: "groq", id: "anthropic/claude-sonnet-4" },

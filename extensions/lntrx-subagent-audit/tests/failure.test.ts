@@ -7,7 +7,7 @@
  * `isError: false` that came with them.
  */
 import { strict as assert } from "node:assert";
-import { contentToText, detectFailure, failureNotice } from "../src/failure.js";
+import { contentToText, detectFailure, failureNotice, stripQuotedBlocks } from "../src/failure.js";
 
 let passed = 0;
 let failed = 0;
@@ -96,6 +96,32 @@ test("an ordinary successful result is not a failed run", () => {
   eq(detectFailure("1. reviewer completed, exit 0, acceptance: accepted").failed, false);
 });
 
+test("a review that quotes a marker in a fenced block is not a failed run", () => {
+  // The self-referential worst case: a reviewer reviewing this extension.
+  const review = [
+    "## Findings",
+    "",
+    "`failure.ts:38` matches this line:",
+    "",
+    "```",
+    "Run 'review' failed: No API key found for anthropic.",
+    "Subagent run failed before producing output.",
+    "```",
+    "",
+    "That pattern looks correct to me.",
+  ].join("\n");
+  eq(detectFailure(review).failed, false);
+});
+
+test("a marker inside a blockquote is not a failed run either", () => {
+  eq(detectFailure("Quoting the harness:\n\n> Background task failed: workflow\n").failed, false);
+});
+
+test("a real marker outside a fence is still caught in the same message", () => {
+  const mixed = "```\nRun 'x' failed: quoted\n```\n\nBackground task failed: **workflow**";
+  eq(detectFailure(mixed).failed, true);
+});
+
 test("empty content is not a failed run", () => {
   eq(detectFailure([]).failed, false);
   eq(detectFailure(undefined).failed, false);
@@ -104,6 +130,14 @@ test("empty content is not a failed run", () => {
 // ---------------------------------------------------------------------------
 // Flattening and the notice
 // ---------------------------------------------------------------------------
+
+test("strips fences and blockquotes, keeps ordinary prose", () => {
+  eq(stripQuotedBlocks("keep\n```\ndrop\n```\n> drop\nkeep2"), "keep\nkeep2");
+});
+
+test("an unterminated fence swallows the rest, rather than half-reading it", () => {
+  eq(stripQuotedBlocks("keep\n```\ndrop\ndrop2"), "keep");
+});
 
 test("flattens a content array into text", () => {
   eq(contentToText([{ type: "text", text: "a" }, { type: "text", text: "b" }]), "a\nb");

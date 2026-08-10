@@ -57,9 +57,36 @@ export function contentToText(content: unknown): string {
     .join("\n");
 }
 
+/**
+ * Drop fenced code blocks and blockquotes.
+ *
+ * A review that quotes one of the markers - and a review of *this* extension
+ * certainly will - would otherwise be flagged as the failure it is describing.
+ * The harness never wraps its own status lines in a fence, so nothing real is
+ * lost by ignoring what is inside one.
+ */
+export function stripQuotedBlocks(text: string): string {
+  const lines: string[] = [];
+  let fence: string | undefined;
+  for (const line of text.split("\n")) {
+    const opener = /^\s*(```+|~~~+)/.exec(line);
+    if (fence) {
+      if (opener && line.trimStart().startsWith(fence)) fence = undefined;
+      continue;
+    }
+    if (opener) {
+      fence = opener[1]!.slice(0, 3);
+      continue;
+    }
+    if (/^\s*>/.test(line)) continue;
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
 export function detectFailure(content: unknown): FailureSignal {
-  const text = contentToText(content);
-  if (!text) return { failed: false };
+  const text = stripQuotedBlocks(contentToText(content));
+  if (!text.trim()) return { failed: false };
 
   for (const pattern of PATTERNS) {
     const match = pattern.regex.exec(text);

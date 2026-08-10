@@ -97,7 +97,23 @@ export function verifyModelRef(
   // model id.
   if (available.some((entry) => fullId(entry) === base)) return { kind: "ok" };
 
-  // The slash belongs to the model id (`anthropic/claude-sonnet-4` on
+  // The leading segment names a provider we hold credentials for. Reading it as
+  // a provider is then the correct reading, and the reference is at worst a
+  // model-id typo within it - pi resolves those, and its failure mode is a
+  // wrong model rather than a dead run.
+  //
+  // This check comes first deliberately. Both readings can be valid at once:
+  // with anthropic credentials configured, `anthropic/claude-sonnet-4` is a
+  // provider-qualified anthropic reference *and* an OpenRouter model id.
+  // Rewriting it would move the run to another vendor, another bill and another
+  // data path behind the caller's back. pi-subagents holds the same line - "a
+  // qualified provider/id query only matches within the named provider ... this
+  // never silently switches providers" - and so does this.
+  const provider = base.slice(0, slash);
+  if (available.some((entry) => entry.provider === provider)) return { kind: "ok" };
+
+  // The leading segment is not a reachable provider, so the only reading left
+  // is that the slash belongs to the model id (`anthropic/claude-sonnet-4` on
   // OpenRouter). Name the provider explicitly so the reference stops depending
   // on who reads it.
   const idMatches = available.filter((entry) => entry.id === base);
@@ -111,11 +127,6 @@ export function verifyModelRef(
       provider: chosen.provider,
     };
   }
-
-  const provider = base.slice(0, slash);
-  // The leading segment names a provider we can reach, so the reference is a
-  // plain model-id typo rather than the credential trap. Leave it to pi.
-  if (available.some((entry) => entry.provider === provider)) return { kind: "ok" };
 
   return {
     kind: "unavailable",

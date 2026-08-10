@@ -21,7 +21,7 @@
  *
  *   sweep      Three of the four runs were detached; their failure arrived as a
  *              display-only notification the caller had no obligation to read.
- *              See history.ts.
+ *              See runs.ts.
  *
  * And one thing was missing afterwards: run-history records `status: "error"`
  * and nothing else, so a failure could be counted but not explained. See
@@ -35,7 +35,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { get, getProject } from "../../../lib/config";
 import { formatAudit, readAudit, readRunMeta, recordAudit } from "./audit.js";
 import { contentToText, detectFailure, failureNotice } from "./failure.js";
-import { detachedFailureNotice, newFailures, readHistory, seedSeen } from "./history.js";
+import { detachedFailureNotice, findFailedRuns } from "./runs.js";
 import {
   applyModelRewrite,
   collectModelRefs,
@@ -100,11 +100,18 @@ function agentOf(input: unknown, meta: { agent?: string } | undefined): string |
 }
 
 export default function (pi: ExtensionAPI) {
-  /** Runs already announced, seeded at session start so old failures stay quiet. */
-  let seenRuns = new Set<string>();
+  /**
+   * Runs already accounted for: reported by the gate below, or already
+   * announced by the sweep. Announcing one twice would be noise; announcing an
+   * attached failure as "never handed to you" would be untrue.
+   */
+  const settledRuns = new Set<string>();
+  /** Runs that finished before this session began are none of its business. */
+  let sessionStartedAt = Math.floor(Date.now() / 1000);
 
   pi.on("session_start", async (_event, ctx) => {
-    seenRuns = seedSeen(readHistory());
+    sessionStartedAt = Math.floor(Date.now() / 1000);
+    settledRuns.clear();
     void ctx;
   });
 
@@ -171,7 +178,10 @@ export default function (pi: ExtensionAPI) {
     if (!signal.failed) return;
 
     const runId = runIdOf(event.details);
-    const meta = runId ? readRunMeta(ctx.cwd, runId) : undefined;
+    const meta = runId ? readRunMeta(ctx.cwd, runId, agentOf(event.input, undefined)) : undefined;
+    // The caller has been told about this one. The sweep must not tell them
+    // again, least of all that they were never told.
+    if (runId) settledRuns.add(runId);
     recordAudit({
       ts: now(),
       status: "failed",
@@ -204,30 +214,42 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", async (_event, ctx) => {
     if (!isEnabled(ctx.cwd, KEY_ENABLED) || !isEnabled(ctx.cwd, KEY_SWEEP)) return;
 
-    const failures = newFailures(readHistory(), seenRuns);
+    const failures = findFailedRuns(ctx.cwd, sessionStartedAt).filter(
+      (failure) => !settledRuns.has(failure.runId),
+    );
     if (failures.length === 0) return;
 
     for (const failure of failures) {
+      settledRuns.add(failure.runId);
       recordAudit({
         ts: failure.ts,
         status: "failed",
         cwd: ctx.cwd,
-        agent: failure.agent,
-        durationMs: failure.duration,
-        source: "run-history",
-        ...(failure.exit !== undefined ? { exit: failure.exit } : {}),
-        error: `Detached run reported status "error" in run-history.jsonl. See ${ctx.cwd}/.pi-subagents/artifacts for the run metadata.`,
+        runId: failure.runId,
+        source: "artifacts",
+        ...(failure.agent ? { agent: failure.agent } : {}),
+        ...(failure.model ? { model: failure.model } : {}),
+        ...(failure.attemptedModels ? { attemptedModels: failure.attemptedModels } : {}),
+        ...(failure.exitCode !== undefined ? { exit: failure.exitCode } : {}),
+        ...(failure.durationMs !== undefined ? { durationMs: failure.durationMs } : {}),
+        ...(failure.error ? { error: failure.error } : {}),
       });
     }
 
-    pi.sendMessage(
-      {
-        customType: "lntrx-subagent-audit",
-        content: detachedFailureNotice(failures),
-        display: true,
-      },
-      { deliverAs: "followUp", triggerTurn: true },
-    );
+    try {
+      pi.sendMessage(
+        {
+          customType: "lntrx-subagent-audit",
+          content: detachedFailureNotice(failures),
+          display: true,
+        },
+        { deliverAs: "followUp", triggerTurn: true },
+      );
+    } catch {
+      // A session being torn down mid-delivery must not print the same
+      // "Extension error" banner this change exists to remove. The audit line
+      // above is already written either way.
+    }
   });
 
   pi.registerCommand("subagent-audit", {
