@@ -38,7 +38,8 @@
       "extensions/lntrx-localmodels",
       "extensions/lntrx-memory",
 "extensions/lntrx-project-rules",
-      "extensions/lntrx-postwrite"
+      "extensions/lntrx-postwrite",
+      "extensions/lntrx-subagent-audit"
     ],
     "skills": [
       "skills"

@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### Added
+
+- lntrx-subagent-audit: a failed subagent is no longer indistinguishable from a
+  successful one. On 2026-08-10 four of fifteen reviewer runs died - three of
+  them in under two seconds on `No API key found for anthropic` - and every
+  calling agent reported success anyway. The extension closes each step of that:
+  - **Preflight.** A `model` argument like `anthropic/claude-sonnet-4` is an
+    OpenRouter model id, but its leading segment reads as a provider, and the
+    child was launched against a provider with no credentials. The registry can
+    tell the two apart, so the reference is rewritten to canonical
+    `provider/id`. A model no configured provider can reach blocks the call with
+    a reason naming what to use instead, instead of spending a run on it.
+  - **Result gate.** The `subagent` tool reports a dead run in its text and
+    still returns `isError: false`. Such a result now comes back as a tool error
+    headed "SUBAGENT RUN FAILED - THIS TOOL CALL DID NOT PRODUCE A RESULT".
+  - **Detached sweep.** Three of the four runs were detached, and their failure
+    arrived as a display-only notice the caller had no obligation to read. New
+    failures in `run-history.jsonl` are now delivered as a follow-up turn.
+  - **`~/.pi/agent/subagent-audit.jsonl`** and `/subagent-audit`. `run-history`
+    records `status: "error"` and nothing else; the audit carries the model
+    asked for, the model tried, the exit code and the error text.
+  - No retries: the cause was a misconfiguration, and retrying would have hidden
+    it four times over.
+
+### Fixed
+
+- lntrx-githooks no longer crashes at session start in a git worktree. `.git` is
+  a file there, so `<repo>/.git/hooks/pre-commit` is not a path, and the
+  resulting `ENOTDIR` took the whole `session_start` handler down - printing an
+  "Extension error" line in every worktree agent, including inside the reviewer
+  subagents that failed on 2026-08-10. Hook paths now come from
+  `git rev-parse --git-path`, which also respects `core.hooksPath`.
+
 ## 0.4.0 - 2026-08-08
 
 ### Added

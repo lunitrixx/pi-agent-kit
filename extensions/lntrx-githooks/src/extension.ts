@@ -6,8 +6,8 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execSync } from "child_process";
-import { existsSync, writeFileSync, chmodSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { get, set, getProject, setProject } from "../../../lib/config";
 
 // ---------------------------------------------------------------------------
@@ -41,6 +41,32 @@ const HOOKS: HookDef[] = [
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Absolute path of a hook, asked of git rather than assembled by hand.
+ *
+ * In a worktree `.git` is a *file* pointing at the real directory, so
+ * `<repo>/.git/hooks/pre-commit` is not a path at all: writing it threw
+ * `ENOTDIR` and took the whole session_start handler with it. That error was
+ * printed by every agent running in a worktree, including inside the failing
+ * reviewer subagents of 2026-08-10.
+ *
+ * `git rev-parse --git-path` resolves the same name in a plain checkout, a
+ * worktree, and a repository with `core.hooksPath` set - all three cases this
+ * used to get wrong. Returns undefined outside a repository.
+ */
+export function resolveHookPath(repoPath: string, hookName: string): string | undefined {
+  try {
+    const resolved = execSync(`git rev-parse --path-format=absolute --git-path hooks/${hookName}`, {
+      encoding: "utf-8",
+      cwd: repoPath,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return resolved.length > 0 ? resolved : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function hookEnabled(repoPath: string, hook: HookDef): boolean {
   const p = getProject(repoPath, hook.configKey);
   if (p !== undefined) return !!p;
@@ -49,9 +75,11 @@ function hookEnabled(repoPath: string, hook: HookDef): boolean {
 }
 
 function hookInstalled(repoPath: string, hook: HookDef): boolean {
-  if (!existsSync(join(repoPath, ".git"))) return true;
+  const hookPath = resolveHookPath(repoPath, hook.name);
+  if (!hookPath) return true; // not a repository - nothing to install, nothing to report
+  if (!existsSync(hookPath)) return false;
   try {
-    const content = execSync(`cat .git/hooks/${hook.name}`, { encoding: "utf-8", cwd: repoPath });
+    const content = readFileSync(hookPath, "utf-8");
     return content.includes("lntrx-githooks") || content.includes("lntrx-guard");
   } catch {
     return false;
@@ -59,18 +87,29 @@ function hookInstalled(repoPath: string, hook: HookDef): boolean {
 }
 
 function installHook(repoPath: string, hook: HookDef): boolean {
-  if (!existsSync(join(repoPath, ".git"))) return false;
-  const hookPath = join(repoPath, ".git", "hooks", hook.name);
-  writeFileSync(hookPath, hook.script);
-  chmodSync(hookPath, 0o755);
-  return true;
+  const hookPath = resolveHookPath(repoPath, hook.name);
+  if (!hookPath) return false;
+  try {
+    mkdirSync(dirname(hookPath), { recursive: true });
+    writeFileSync(hookPath, hook.script);
+    chmodSync(hookPath, 0o755);
+    return true;
+  } catch {
+    // A read-only or otherwise unwritable hooks directory is not worth taking
+    // the session down for; the tool-call guard below still blocks main.
+    return false;
+  }
 }
 
 function removeHook(repoPath: string, hook: HookDef): boolean {
-  const hookPath = join(repoPath, ".git", "hooks", hook.name);
-  if (!existsSync(hookPath)) return false;
-  execSync(`rm -f "${hookPath}"`);
-  return true;
+  const hookPath = resolveHookPath(repoPath, hook.name);
+  if (!hookPath || !existsSync(hookPath)) return false;
+  try {
+    rmSync(hookPath, { force: true });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
