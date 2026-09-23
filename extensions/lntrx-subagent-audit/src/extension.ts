@@ -49,6 +49,7 @@ const KEY_ENABLED = "lntrx-subagent-audit.enabled";
 const KEY_PREFLIGHT = "lntrx-subagent-audit.preflight";
 const KEY_GATE = "lntrx-subagent-audit.gate";
 const KEY_SWEEP = "lntrx-subagent-audit.sweep";
+const KEY_REQUIRE_REVIEWER = "lntrx-subagent-audit.require-reviewer";
 
 /** Project overrides global overrides default, the order every extension here uses. */
 function isEnabled(cwd: string, key: string): boolean {
@@ -106,18 +107,38 @@ export default function (pi: ExtensionAPI) {
    * attached failure as "never handed to you" would be untrue.
    */
   const settledRuns = new Set<string>();
+  /**
+   * Agent names that appeared in at least one subagent tool_call during this
+   * session, regardless of whether the call was later blocked by preflight.
+   * Used by the require-reviewer check to detect the "silence" case: the
+   * reviewer was never dispatched at all.
+   */
+  const calledAgentNames = new Set<string>();
+  /**
+   * Whether the require-reviewer warning has already been sent this session.
+   * Prevents the sweep from re-sending the same notice on every settle.
+   */
+  let reviewerWarningSent = false;
   /** Runs that finished before this session began are none of its business. */
   let sessionStartedAt = Math.floor(Date.now() / 1000);
 
   pi.on("session_start", async (_event, ctx) => {
     sessionStartedAt = Math.floor(Date.now() / 1000);
     settledRuns.clear();
+    calledAgentNames.clear();
+    reviewerWarningSent = false;
     void ctx;
   });
 
   // ---- preflight: refuse or correct a model the child cannot reach ----------
   pi.on("tool_call", async (event, ctx) => {
     if (event.toolName !== SUBAGENT_TOOL) return;
+
+    // Record the agent name even if preflight blocks it - the require-reviewer
+    // check only cares whether a call was made, not whether it succeeded.
+    const callAgent = agentOf(event.input, undefined);
+    if (callAgent) calledAgentNames.add(callAgent);
+
     if (!isEnabled(ctx.cwd, KEY_ENABLED) || !isEnabled(ctx.cwd, KEY_PREFLIGHT)) return;
 
     const available = availableModels(ctx);
@@ -214,6 +235,42 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", async (_event, ctx) => {
     if (!isEnabled(ctx.cwd, KEY_ENABLED) || !isEnabled(ctx.cwd, KEY_SWEEP)) return;
 
+    // ---- require-reviewer: the "silence" check ------------------------------
+    // If the project or global config names a required reviewer agent and that
+    // agent was never called this session, the review simply did not happen.
+    // Neither the gate nor the sweep can surface this because no tool_result or
+    // artifact exists. Emit a follow-up message so the caller cannot report
+    // "work complete" without acknowledging the missing review.
+    const requiredReviewer = getProject(ctx.cwd, KEY_REQUIRE_REVIEWER) ?? get(KEY_REQUIRE_REVIEWER);
+    if (typeof requiredReviewer === "string" && requiredReviewer.length > 0
+        && !calledAgentNames.has(requiredReviewer) && !reviewerWarningSent) {
+      reviewerWarningSent = true;
+      recordAudit({
+        ts: now(),
+        status: "failed",
+        cwd: ctx.cwd,
+        agent: requiredReviewer,
+        source: "require-reviewer",
+        error: `Required reviewer "${requiredReviewer}" was never dispatched this session. No review was performed.`,
+      });
+      try {
+        pi.sendMessage(
+          {
+            customType: "lntrx-subagent-audit",
+            content:
+              `No "${requiredReviewer}" subagent was dispatched this session. ` +
+              `If a code review was expected before this work was considered complete, it did not happen. ` +
+              `Dispatch the reviewer before reporting the work as finished.`,
+            display: true,
+          },
+          { deliverAs: "followUp", triggerTurn: true },
+        );
+      } catch {
+        // Same rationale as the sweep catch above.
+      }
+    }
+
+    // ---- sweep: detached failures -------------------------------------------
     const failures = findFailedRuns(ctx.cwd, sessionStartedAt).filter(
       (failure) => !settledRuns.has(failure.runId),
     );

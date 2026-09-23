@@ -22,7 +22,7 @@ pi install npm:@lunitrixx/pi-agent-kit
 | `lntrx-postwrite` | Auto-format + LSP diagnostics on write/edit (merged from lntrx-fmt + lntrx-lsp) |
 | `lntrx-memory` | Cross-session SQLite memory (v2): policy-mode, FTS5 search, anatomy scanning, bug tracking, auto-aging |
 | `lntrx-project-rules` | Inject `.pi/rules/` into system prompt + banner widget |
-| `lntrx-subagent-audit` | Makes a failed subagent visible to its caller: model preflight, failed runs returned as tool errors, `/subagent-audit` |
+| `lntrx-subagent-audit` | Makes a failed or missing subagent visible to its caller: model preflight, failed runs returned as tool errors, `require-reviewer` check, `/subagent-audit` |
 
 ### Skills (15)
 Auto-detected by Pi from your prompt.

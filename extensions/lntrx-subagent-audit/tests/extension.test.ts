@@ -279,6 +279,86 @@ await test("a failure already returned as a tool error is not announced a second
   eq(h.sent.length, 0);
 });
 
+// ---------------------------------------------------------------------------
+// 5. Require-reviewer: the "silence" that makes a missing review unmissable
+// ---------------------------------------------------------------------------
+
+import { mkdirSync as mkDirSync } from "node:fs";
+
+function setRequireReviewer(cwd: string, value: string | undefined): void {
+  const dir = join(cwd, ".pi");
+  mkDirSync(dir, { recursive: true });
+  const cfgPath = join(dir, "pi-agent-kit.json");
+  const cfg = value === undefined ? {} : { "lntrx-subagent-audit.require-reviewer": value };
+  writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
+}
+
+await test("require-reviewer: no warning when reviewer was dispatched", async () => {
+  const repo = join(workDir, "rr-ok");
+  setRequireReviewer(repo, "reviewer");
+  const h = buildHarness(repo);
+  await h.fire("session_start", {});
+  // Simulate a reviewer call passing through.
+  await h.fire("tool_call", { toolName: "subagent", input: { agent: "reviewer", task: "review" } });
+  // Reviewer succeeded - no failure to sweep.
+  await h.fire("tool_result", {
+    toolName: "subagent",
+    input: { agent: "reviewer" },
+    isError: false,
+    details: {},
+    content: [{ type: "text", text: "## Findings\n\nLooks good." }],
+  });
+  await h.fire("agent_settled", {});
+  eq(h.sent.length, 0);
+});
+
+await test("require-reviewer: warns when reviewer was never dispatched", async () => {
+  const repo = join(workDir, "rr-missing");
+  setRequireReviewer(repo, "reviewer");
+  const h = buildHarness(repo);
+  await h.fire("session_start", {});
+  // A non-reviewer subagent runs; no reviewer is ever called.
+  await h.fire("tool_call", { toolName: "subagent", input: { agent: "scout", task: "recon" } });
+  await h.fire("agent_settled", {});
+  eq(h.sent.length, 1);
+  ok(h.sent[0]!.content.includes("No \"reviewer\" subagent was dispatched"), h.sent[0]!.content);
+  ok(h.sent[0]!.content.includes("did not happen"), h.sent[0]!.content);
+  // The missing review is also written to the audit.
+  const entry = readAudit(1)[0]!;
+  eq(entry.status, "failed");
+  eq(entry.agent, "reviewer");
+  eq(entry.source, "require-reviewer");
+});
+
+await test("require-reviewer: disabled by default (no config = no warning)", async () => {
+  const repo = join(workDir, "rr-default");
+  // No config file - require-reviewer is not set.
+  const h = buildHarness(repo);
+  await h.fire("session_start", {});
+  await h.fire("agent_settled", {});
+  eq(h.sent.length, 0);
+});
+
+await test("require-reviewer: empty string disables the check", async () => {
+  const repo = join(workDir, "rr-empty");
+  setRequireReviewer(repo, "");
+  const h = buildHarness(repo);
+  await h.fire("session_start", {});
+  await h.fire("agent_settled", {});
+  eq(h.sent.length, 0);
+});
+
+await test("require-reviewer: does not double-warn on repeated settle", async () => {
+  const repo = join(workDir, "rr-once");
+  setRequireReviewer(repo, "reviewer");
+  const h = buildHarness(repo);
+  await h.fire("session_start", {});
+  await h.fire("agent_settled", {});
+  eq(h.sent.length, 1);
+  await h.fire("agent_settled", {});
+  eq(h.sent.length, 1);
+});
+
 console.log(`\n  ${passed} passed, ${failed} failed`);
 rmSync(workDir, { recursive: true, force: true });
 if (failed > 0) process.exit(1);

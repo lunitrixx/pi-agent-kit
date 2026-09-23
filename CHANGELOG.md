@@ -4,6 +4,13 @@
 
 ### Added
 
+- lntrx-subagent-audit: a review that was never dispatched is no longer invisible.
+  `lntrx-subagent-audit.require-reviewer` names the agent that must have been
+  called before a session settles. If it was never called, the extension records
+  an audit entry and delivers a follow-up message that names the missing agent
+  explicitly. The check is off by default and opt-in per project via
+  `.pi/pi-agent-kit.json` (this repository ships it enabled for `reviewer`).
+
 - lntrx-subagent-audit: a failed subagent is no longer indistinguishable from a
   successful one. On 2026-08-10 four of fifteen reviewer runs died - three of
   them in under two seconds on `No API key found for anthropic` - and every
