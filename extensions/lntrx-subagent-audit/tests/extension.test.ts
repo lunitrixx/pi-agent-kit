@@ -348,6 +348,39 @@ await test("require-reviewer: empty string disables the check", async () => {
   eq(h.sent.length, 0);
 });
 
+await test("require-reviewer: no warning when reviewer was dispatched via workflow script", async () => {
+  const repo = join(workDir, "rr-workflow");
+  setRequireReviewer(repo, "reviewer");
+  const h = buildHarness(repo);
+  await h.fire("session_start", {});
+  // Reviewer is dispatched inside a workflow script - no top-level agent field.
+  await h.fire("tool_call", {
+    toolName: "subagent",
+    input: {
+      workflowScript: "return runs.run('review', { agent: 'reviewer', task: `review` });",
+    },
+  });
+  await h.fire("agent_settled", {});
+  eq(h.sent.length, 0);
+});
+
+await test("require-reviewer: a blocked reviewer call still triggers the warning", async () => {
+  const repo = join(workDir, "rr-blocked");
+  setRequireReviewer(repo, "reviewer");
+  const h = buildHarness(repo);
+  await h.fire("session_start", {});
+  // The reviewer call is blocked by preflight (unreachable model).
+  const verdict = await h.fire("tool_call", {
+    toolName: "subagent",
+    input: { agent: "reviewer", task: "review", model: "anthropic/claude-opus-9" },
+  });
+  eq(verdict?.block, true);
+  await h.fire("agent_settled", {});
+  // The blocked call must not satisfy the require-reviewer check.
+  eq(h.sent.length, 1);
+  ok(h.sent[0]!.content.includes("No \"reviewer\" subagent was dispatched"), h.sent[0]!.content);
+});
+
 await test("require-reviewer: does not double-warn on repeated settle", async () => {
   const repo = join(workDir, "rr-once");
   setRequireReviewer(repo, "reviewer");
