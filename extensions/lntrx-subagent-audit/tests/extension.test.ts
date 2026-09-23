@@ -381,6 +381,26 @@ await test("require-reviewer: a blocked reviewer call still triggers the warning
   ok(h.sent[0]!.content.includes("No \"reviewer\" subagent was dispatched"), h.sent[0]!.content);
 });
 
+await test("require-reviewer: fires even when sweep is disabled", async () => {
+  const repo = join(workDir, "rr-sweep-off");
+  setRequireReviewer(repo, "reviewer");
+  // Disable the sweep via project config, keep require-reviewer active.
+  const dir = join(repo, ".pi");
+  mkDirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "pi-agent-kit.json"),
+    JSON.stringify({
+      "lntrx-subagent-audit.require-reviewer": "reviewer",
+      "lntrx-subagent-audit.sweep": false,
+    }, null, 2) + "\n",
+  );
+  const h = buildHarness(repo);
+  await h.fire("session_start", {});
+  await h.fire("agent_settled", {});
+  eq(h.sent.length, 1);
+  ok(h.sent[0]!.content.includes("No \"reviewer\" subagent was dispatched"));
+});
+
 await test("require-reviewer: does not double-warn on repeated settle", async () => {
   const repo = join(workDir, "rr-once");
   setRequireReviewer(repo, "reviewer");
