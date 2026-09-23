@@ -49,6 +49,7 @@ const KEY_ENABLED = "lntrx-subagent-audit.enabled";
 const KEY_PREFLIGHT = "lntrx-subagent-audit.preflight";
 const KEY_GATE = "lntrx-subagent-audit.gate";
 const KEY_SWEEP = "lntrx-subagent-audit.sweep";
+const KEY_REQUIRE_REVIEWER = "lntrx-subagent-audit.require-reviewer";
 
 /** Project overrides global overrides default, the order every extension here uses. */
 function isEnabled(cwd: string, key: string): boolean {
@@ -99,6 +100,26 @@ function agentOf(input: unknown, meta: { agent?: string } | undefined): string |
   return undefined;
 }
 
+/**
+ * Add every agent name that will actually run to the session's calledAgentNames set.
+ * Two shapes exist: a top-level `agent` field (single-agent call) and `agent: 'name'`
+ * literals inside a `workflowScript` string (multi-agent dispatch). Both must be
+ * captured so the require-reviewer check does not fire a false positive when the
+ * reviewer is dispatched via a workflow.
+ */
+function recordCalledAgents(input: unknown, set: Set<string>): void {
+  if (!input || typeof input !== "object") return;
+  const record = input as Record<string, unknown>;
+
+  if (typeof record.agent === "string") set.add(record.agent);
+
+  const ws = record.workflowScript;
+  if (typeof ws === "string") {
+    const pattern = /\bagent\s*:\s*['\"`]([\w-]+)['\"`]/g;
+    for (const match of ws.matchAll(pattern)) set.add(match[1]!);
+  }
+}
+
 export default function (pi: ExtensionAPI) {
   /**
    * Runs already accounted for: reported by the gate below, or already
@@ -106,22 +127,48 @@ export default function (pi: ExtensionAPI) {
    * attached failure as "never handed to you" would be untrue.
    */
   const settledRuns = new Set<string>();
+  /**
+   * Agent names that appeared in at least one subagent tool_call during this
+   * session, regardless of whether the call was later blocked by preflight.
+   * Used by the require-reviewer check to detect the "silence" case: the
+   * reviewer was never dispatched at all.
+   */
+  const calledAgentNames = new Set<string>();
+  /**
+   * Whether the require-reviewer warning has already been sent this session.
+   * Prevents the sweep from re-sending the same notice on every settle.
+   */
+  let reviewerWarningSent = false;
   /** Runs that finished before this session began are none of its business. */
   let sessionStartedAt = Math.floor(Date.now() / 1000);
 
   pi.on("session_start", async (_event, ctx) => {
     sessionStartedAt = Math.floor(Date.now() / 1000);
     settledRuns.clear();
+    calledAgentNames.clear();
+    reviewerWarningSent = false;
     void ctx;
   });
 
   // ---- preflight: refuse or correct a model the child cannot reach ----------
   pi.on("tool_call", async (event, ctx) => {
     if (event.toolName !== SUBAGENT_TOOL) return;
-    if (!isEnabled(ctx.cwd, KEY_ENABLED) || !isEnabled(ctx.cwd, KEY_PREFLIGHT)) return;
+
+    const preflightEnabled =
+      isEnabled(ctx.cwd, KEY_ENABLED) && isEnabled(ctx.cwd, KEY_PREFLIGHT);
+
+    if (!preflightEnabled) {
+      // Preflight is off - the call proceeds unconditionally. Record the agents.
+      recordCalledAgents(event.input, calledAgentNames);
+      return;
+    }
 
     const available = availableModels(ctx);
-    if (available.length === 0) return;
+    if (available.length === 0) {
+      // No model registry to check against - the call proceeds. Record the agents.
+      recordCalledAgents(event.input, calledAgentNames);
+      return;
+    }
     const preferred = (ctx as any)?.model?.provider as string | undefined;
 
     for (const ref of collectModelRefs(event.input)) {
@@ -164,9 +211,15 @@ export default function (pi: ExtensionAPI) {
           source: "preflight",
           error: reason,
         });
+        // The call is blocked: the agent was never actually dispatched, so it
+        // must not count toward the require-reviewer set.
         return { block: true, reason };
       }
     }
+
+    // The call passed preflight and will actually run. Record the agent names
+    // now, so the require-reviewer check reflects calls that were truly made.
+    recordCalledAgents(event.input, calledAgentNames);
   });
 
   // ---- gate: a failed run comes back as a tool error ------------------------
@@ -212,8 +265,46 @@ export default function (pi: ExtensionAPI) {
 
   // ---- sweep: detached failures that never became a tool result -------------
   pi.on("agent_settled", async (_event, ctx) => {
-    if (!isEnabled(ctx.cwd, KEY_ENABLED) || !isEnabled(ctx.cwd, KEY_SWEEP)) return;
+    if (!isEnabled(ctx.cwd, KEY_ENABLED)) return;
 
+    // ---- require-reviewer: the "silence" check ------------------------------
+    // Independent of the sweep: a session with no reviewer call at all has no
+    // artifact to sweep, so the two checks serve different failure modes.
+    // If the project or global config names a required reviewer agent and that
+    // agent was never called this session, the review simply did not happen.
+    // Emit a follow-up message so the caller cannot report "work complete"
+    // without acknowledging the missing review.
+    const requiredReviewer = getProject(ctx.cwd, KEY_REQUIRE_REVIEWER) ?? get(KEY_REQUIRE_REVIEWER);
+    if (typeof requiredReviewer === "string" && requiredReviewer.length > 0
+        && !calledAgentNames.has(requiredReviewer) && !reviewerWarningSent) {
+      reviewerWarningSent = true;
+      recordAudit({
+        ts: now(),
+        status: "failed",
+        cwd: ctx.cwd,
+        agent: requiredReviewer,
+        source: "require-reviewer",
+        error: `Required reviewer "${requiredReviewer}" was never dispatched this session. No review was performed.`,
+      });
+      try {
+        pi.sendMessage(
+          {
+            customType: "lntrx-subagent-audit",
+            content:
+              `No "${requiredReviewer}" subagent was dispatched this session. ` +
+              `If a code review was expected before this work was considered complete, it did not happen. ` +
+              `Dispatch the reviewer before reporting the work as finished.`,
+            display: true,
+          },
+          { deliverAs: "followUp", triggerTurn: true },
+        );
+      } catch {
+        // Same rationale as the sweep catch below.
+      }
+    }
+
+    // ---- sweep: detached failures -------------------------------------------
+    if (!isEnabled(ctx.cwd, KEY_SWEEP)) return;
     const failures = findFailedRuns(ctx.cwd, sessionStartedAt).filter(
       (failure) => !settledRuns.has(failure.runId),
     );
