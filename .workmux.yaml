@@ -2,8 +2,8 @@
 #
 # One task, one worktree, one window.
 #
-# `workmux add feat/whatever -l pi` branches off main, lays out a single agent and
-# starts it with the task already in it. Agents do not share a checkout, which
+# `workmux add feat/whatever -l qwen` branches off main, lays out a single agent
+# and starts it with the task already in it. Agents do not share a checkout, which
 # matters here for a specific reason: this repository is a Pi *package*, and its
 # extensions are loaded from paths listed in package.json. Two agents editing
 # `extensions/` in one tree would each load half of the other's work and blame the
@@ -30,12 +30,10 @@ base_branch: main
 # removes that prerequisite; `workmux dashboard` is how you look at them.
 mode: session
 
-# A built-in, not one of the named profiles from ~/.config/workmux/config.yaml.
-#
-# `agents` is global-only, so `coder-pi` means nothing on a machine that has not
-# defined it - and this file is committed. The model tier is chosen per task via
-# the layouts below.
-agent: claude
+# The one coding tier. `coder-qwen` is a named profile in
+# ~/.config/workmux/config.yaml - `agents` is global-only, so the profile must
+# exist on the machine that loads this committed file.
+agent: coder-qwen
 
 #-------------------------------------------------------------------------------
 # Panes
@@ -57,32 +55,18 @@ panes:
 # Named layouts
 #-------------------------------------------------------------------------------
 
-# The two model tiers. The names are the contract with the orchestrator's
-# projects.yaml, which dispatches with `-l pi` or `-l claude`.
+# The single model tier. The name is the contract with the orchestrator's
+# projects.yaml, which dispatches with `-l qwen`.
 #
-#   workmux add feat/x -l pi       DeepSeek V4 Pro through pi, for bounded work
-#   workmux add feat/y -l claude   the expensive one
+#   workmux add feat/x -l qwen
 #
-# Worth knowing when choosing here: the global config's own note on coder-pi is
-# that its weakest language by LLM judge is JavaScript, with TypeScript at 36.1%.
-# Every extension in this repository is TypeScript, so `-l pi` belongs on the
-# bounded, checkable jobs - one skill, one prompt, one extension option - and
-# anything touching the loader wiring goes to claude.
-#
-# The profiles themselves (coder-pi, coder-claude) live in the global config,
-# because which model you drive and with whose credentials is a property of the
-# machine, not of this repository.
+# The profile (coder-qwen) lives in the global config, because which model you
+# drive and with whose credentials is a property of the machine, not of this
+# repository.
 layouts:
-  pi:
+  qwen:
     panes:
-      - command: <agent:coder-pi>
-        name: agent
-        focus: true
-
-  claude:
-    panes:
-      - command: <agent:coder-claude>
-        name: agent
+      - command: <agent:coder-qwen>
         focus: true
 
 #-------------------------------------------------------------------------------
