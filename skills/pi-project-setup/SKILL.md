@@ -41,9 +41,10 @@ and migration steps.
 | `Makefile` / `justfile` | Created | Not touched |
 | `git init` | Executed | Not touched |
 
-`AGENTS.md` is the single source of truth for the project, including its
-conventions. `CLAUDE.md` is a thin adapter that delegates to it. There is no
-separate rules directory.
+`AGENTS.md` is the single source of truth for project-specific instructions.
+`CLAUDE.md` is a thin adapter that delegates to it. There is no separate rules
+directory, and universal agent conventions are never written into project
+files.
 
 ## Skills location: two patterns
 
@@ -63,8 +64,10 @@ skills live in a top-level `skills/` directory instead:
    host tables, tech-stack details must be preserved in the new `AGENTS.md`.
 2. **Never touch project source code.** Only agent-config and scaffolding files.
 3. **Never overwrite without asking** if a file already has meaningful content.
-4. **Conventions live in `AGENTS.md`.** Keep the project-specific ones and the
-   universal ones in the same `## Conventions` section - no separate rules file.
+4. **`AGENTS.md` carries project-specific conventions only.** Universal agent
+   conventions (commit format, PR etiquette, branch policy, writing style) live
+   in the global system prompt and must never be copied into `AGENTS.md`,
+   `.pi/rules/`, or any other project file.
 5. **Skills move to `.pi/skills/`, never copy.** The canonical skill lives exactly
    once. `.claude/skills/` becomes a git-tracked symlink.
 6. **Project-specific files stay.** `.editorconfig` indent size, `flake.nix`,
@@ -167,49 +170,11 @@ CLAUDE.md             # Claude Code adapter, points back to AGENTS.md
 
 ## Conventions
 
-Project-specific conventions go here as they emerge. Below is the universal
-baseline every project in this setup follows - keep it, extend it per project:
+Project-specific conventions only; add them as they emerge. Universal agent
+conventions (commit format, PR etiquette, branch policy, writing style) are
+provided by the global system prompt - never write them into this file.
 
-### Commits
-
-- Conventional Commits `type(scope): summary`. Types: feat, fix, chore, docs,
-  refactor, test, perf.
-- Scope optional, lowercase, the affected module/component.
-- Summary max 72 chars, imperative mood ("add" not "added").
-- Body explains motivation, not implementation. Skip if the summary is
-  self-explanatory.
-- One commit message per change - no bullet lists of unrelated changes.
-
-### Workflow
-
-- Never commit directly to `main`. Every change goes through a branch and a
-  Pull Request.
-- Branch naming: `feat/<topic>` for features, `fix/<topic>` for bugfixes.
-- Always squash-merge with a single clean squash commit message.
-- Git/GitHub artifacts (commit messages, PR titles/bodies, issues, branch
-  names) are always written in English.
-- No trailer block on commits or PRs.
-- After every user-facing change, update CHANGELOG.md under the topmost
-  `## Unreleased` section. If the section does not exist, create it.
-- After changes to project structure, entry points, or commands, check whether
-  README.md is still accurate and propose an update.
-
-### Pull requests
-
-- Never open a PR without asking first. Branches and commits are fine; only
-  open a PR when explicitly asked.
-- Never merge a PR without explicit confirmation.
-- Always squash-merge. The squash commit title includes the PR number on the
-  right: `type(scope): summary (#N)`. Use the `merge-pr` skill, which handles
-  this automatically.
-
-### Writing style
-
-- Applies to all agent output: chat replies, docs, code comments, commit
-  messages, and PRs.
-- Use a plain hyphen `-` as the dash. No em or en dashes.
-- No emojis or decorative icons by default; add one only when it genuinely
-  aids clarity.
+<!-- Add project-specific conventions here as they emerge. -->
 ```
 
 **For existing projects** — extract from the current agent instructions
@@ -219,12 +184,15 @@ and `## Conventions` from the existing content.
 Extraction rules:
 - **`## Project`:** Pull from the existing README or first section of CLAUDE.md.
   Include tech stack, purpose, key directories.
-- **`## Conventions`:** Pull in the project-specific conventions AND the
-  universal baseline (Commits, Workflow, Pull requests, Writing style). If the
-  old CLAUDE.md, an old `.pi/rules/` directory, or inline text already carries
-  some of these, merge them in once - no duplication. If the project already
-  has a `.pi/rules/` directory, fold its contents into `## Conventions` and
-  delete the directory.
+- **`## Conventions`:** Extract _project-specific_ conventions only. Universal
+  agent conventions (commit format, PR etiquette, branch policy, writing
+  style) are provided by the global system prompt - if the old `CLAUDE.md`,
+  an old `.pi/rules/` directory, or inline text already carries them, drop
+  them from the new `AGENTS.md` instead of copying them in.
+- **`.pi/rules/` and `.claude/rules`:** If the project has a `.pi/rules/`
+  directory, move any genuinely project-specific rules into `## Conventions`,
+  delete the universal ones, and remove the directory plus the `.claude/rules`
+  symlink.
 - **`## Skills`:** List skills found in `.pi/skills/` (after migration) plus
   relevant pi-agent-kit skills.
 
@@ -429,8 +397,9 @@ clean: ## Remove build artifacts
 
 - `skills-lock.json` — Skills are now in `.pi/skills/`, tracked by git.
 - `.claude/skills/` old contents (replaced by symlink).
-- A `.pi/rules/` directory and its `.claude/rules` symlink - the rules are now
-  part of `AGENTS.md`.
+- A `.pi/rules/` directory and its `.claude/rules` symlink - universal rules
+  belong in the global system prompt, and any project-specific rules it
+  carried are already merged into `AGENTS.md`.
 - Any duplicate agent instruction files (`.cursorrules`,
   `.github/copilot-instructions.md`) that are fully covered by `AGENTS.md` —
   but only if the user confirms.
@@ -438,7 +407,8 @@ clean: ## Remove build artifacts
 ## Phase 4: Verify
 
 1. Read back `AGENTS.md` — is all project-specific info preserved, and does
-   `## Conventions` carry the universal baseline without duplication?
+   `## Conventions` contain project-specific conventions only (no universal
+   rules)?
 2. Check `.claude/skills/` — symlink to `.pi/skills/`.
 3. Check that no `.pi/rules/` directory or `.claude/rules` symlink remains.
 4. Check `.pi/skills/` — canonical skills present.
@@ -453,8 +423,9 @@ clean: ## Remove build artifacts
 - **`AGENTS.md` already exists and is populated:** Ask before overwriting.
 - **No `.pi/` directory:** Create it with `settings.json`.
 - **`.claude/` doesn't exist:** Create it with the skills symlink.
-- **A `.pi/rules/` directory exists:** Fold its contents into `AGENTS.md`
-  `## Conventions`, then remove the directory and the `.claude/rules` symlink.
+- **A `.pi/rules/` directory exists:** Move genuinely project-specific rules
+  into `AGENTS.md` `## Conventions`, delete the universal ones, then remove
+  the directory and the `.claude/rules` symlink.
 - **`.editorconfig` indent differs from defaults:** Keep the project's existing
   indent size.
 - **Project is a Pi package** (`"pi.skills"` in `package.json`): Use `skills/`
