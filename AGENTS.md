@@ -62,16 +62,7 @@ This kit does not ship its own agent definitions. Subagents (`review`, `plan`,
 
 ## Extensions
 
-The package manifest (`pi.extensions` in `package.json`) currently loads only
-`lntrx-header` and `lntrx-footer` (rainbow header + status bar). The other
-extension sources under `extensions/` are kept for reference but are not
-loaded; durable agent conventions now live in the global system prompt
-(`~/.pi/agent/APPEND_SYSTEM.md`) and cross-session memory is provided by the
-`context-mode` package.
-
-## Shared memory (lntrx-memory)
-
-This project used lntrx-memory for cross-session recall. The extension is no
-longer loaded by the package; memory is now kept in `context-mode` (`ctx_search` /
-`ctx_index`). The database at `~/.pi/memory.db` and the sources under
-`extensions/lntrx-memory/` remain available if the extension is ever re-added.
+The package manifest (`pi.extensions` in `package.json`) loads only
+`lntrx-header` and `lntrx-footer` (rainbow header + status bar). Durable agent
+conventions live in the global system prompt (`~/.pi/agent/APPEND_SYSTEM.md`),
+and cross-session memory is provided by the `context-mode` package.
