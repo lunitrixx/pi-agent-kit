@@ -29,17 +29,7 @@
   "pi": {
     "extensions": [
       "extensions/lntrx-header",
-      "extensions/lntrx-lang",
-      "extensions/lntrx-grill-me",
-      "extensions/lntrx-footer",
-      "extensions/lntrx-permit",
-      "extensions/lntrx-githooks",
-      "extensions/lntrx-health",
-      "extensions/lntrx-localmodels",
-      "extensions/lntrx-memory",
-"extensions/lntrx-project-rules",
-      "extensions/lntrx-postwrite",
-      "extensions/lntrx-subagent-audit"
+      "extensions/lntrx-footer"
     ],
     "skills": [
       "skills"

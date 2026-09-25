@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Removed
+
+- The package no longer loads `lntrx-lang`, `lntrx-grill-me`, `lntrx-permit`,
+  `lntrx-githooks`, `lntrx-health`, `lntrx-localmodels`, `lntrx-memory`,
+  `lntrx-project-rules`, `lntrx-postwrite`, or `lntrx-subagent-audit`. Only
+  `lntrx-header` and `lntrx-footer` remain in `pi.extensions`. Durable agent
+  conventions moved to the global system prompt (`~/.pi/agent/APPEND_SYSTEM.md`),
+  and cross-session memory is provided by `context-mode`. The extension sources
+  remain in `extensions/` for reference.
+
 ### Added
 
 - lntrx-subagent-audit: a review that was never dispatched is no longer invisible.

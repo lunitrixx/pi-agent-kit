@@ -60,29 +60,18 @@ Bundled skills:
 This kit does not ship its own agent definitions. Subagents (`review`, `plan`,
 `build`) are provided by the `pi-subagents` dependency and loaded at runtime.
 
+## Extensions
+
+The package manifest (`pi.extensions` in `package.json`) currently loads only
+`lntrx-header` and `lntrx-footer` (rainbow header + status bar). The other
+extension sources under `extensions/` are kept for reference but are not
+loaded; durable agent conventions now live in the global system prompt
+(`~/.pi/agent/APPEND_SYSTEM.md`) and cross-session memory is provided by the
+`context-mode` package.
+
 ## Shared memory (lntrx-memory)
 
-This project uses lntrx-memory for cross-session recall. Memory is stored in a
-SQLite database with FTS5 full-text search — **every agent should consult it**:
-
-- **DB path:** `~/.pi/memory.db` (override with `LNTRX_MEMORY_DB`)
-- **Backend:** `node:sqlite` (Node 24+, no native dependencies)
-
-### Tools
-
-- `lntrx_memory_search(query, limit?, scope?)` — Search by keyword (FTS5)
-- `lntrx_memory_learn(headline, detail?, category?, labels?, scope?, id?)` — Save or update
-- `lntrx_memory_forget(id, table?)` — Delete an entry or bug
-- `lntrx_memory_scan()` — Scan project anatomy
-- `lntrx_memory_bug(symptom, solution?, state?, id?)` — Track or update a bug
-
-### Commands
-
-- `/memory list [N]` — Recent entries
-- `/memory search <query>` — Full-text search
-- `/memory learn <text>` — Quick save
-- `/memory forget <id|all> [bug]` — Delete entries
-- `/memory scan` — Rescan anatomy
-- `/memory bug add|fix|close|delete` — Bug management
-- `/memory bugs` — List open bugs
-- `/memory health` — DB stats
+This project used lntrx-memory for cross-session recall. The extension is no
+longer loaded by the package; memory is now kept in `context-mode` (`ctx_search` /
+`ctx_index`). The database at `~/.pi/memory.db` and the sources under
+`extensions/lntrx-memory/` remain available if the extension is ever re-added.
