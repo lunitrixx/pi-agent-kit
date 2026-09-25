@@ -66,8 +66,8 @@ skills live in a top-level `skills/` directory instead:
 3. **Never overwrite without asking** if a file already has meaningful content.
 4. **`AGENTS.md` carries project-specific conventions only.** Universal agent
    conventions (commit format, PR etiquette, branch policy, writing style) live
-   in the global system prompt and must never be copied into `AGENTS.md`,
-   `.pi/rules/`, or any other project file.
+   in the global system prompt and must never be copied into `AGENTS.md`
+   or any other project file.
 5. **Skills move to `.pi/skills/`, never copy.** The canonical skill lives exactly
    once. `.claude/skills/` becomes a git-tracked symlink.
 6. **Project-specific files stay.** `.editorconfig` indent size, `flake.nix`,
@@ -118,7 +118,7 @@ Show the user exactly what will happen, grouped by action:
 - **Create:** New files that don't exist
 - **Replace:** Files that will be overwritten
 - **Move:** Files changing location (skills migration)
-- **Delete:** Files being removed (old lockfiles, duplicates, a `.pi/rules/` dir)
+- **Delete:** Files being removed (old lockfiles, duplicates)
 - **Update:** Files being modified (`.pi/settings.json`, `.gitignore`)
 - **Preserve:** Project-specific files staying unchanged
 
@@ -186,13 +186,9 @@ Extraction rules:
   Include tech stack, purpose, key directories.
 - **`## Conventions`:** Extract _project-specific_ conventions only. Universal
   agent conventions (commit format, PR etiquette, branch policy, writing
-  style) are provided by the global system prompt - if the old `CLAUDE.md`,
-  an old `.pi/rules/` directory, or inline text already carries them, drop
-  them from the new `AGENTS.md` instead of copying them in.
-- **`.pi/rules/` and `.claude/rules`:** If the project has a `.pi/rules/`
-  directory, move any genuinely project-specific rules into `## Conventions`,
-  delete the universal ones, and remove the directory plus the `.claude/rules`
-  symlink.
+  style) are provided by the global system prompt - if the old `CLAUDE.md`
+  or inline text already carries them, drop them from the new `AGENTS.md`
+  instead of copying them in.
 - **`## Skills`:** List skills found in `.pi/skills/` (after migration) plus
   relevant pi-agent-kit skills.
 
@@ -397,9 +393,6 @@ clean: ## Remove build artifacts
 
 - `skills-lock.json` — Skills are now in `.pi/skills/`, tracked by git.
 - `.claude/skills/` old contents (replaced by symlink).
-- A `.pi/rules/` directory and its `.claude/rules` symlink - universal rules
-  belong in the global system prompt, and any project-specific rules it
-  carried are already merged into `AGENTS.md`.
 - Any duplicate agent instruction files (`.cursorrules`,
   `.github/copilot-instructions.md`) that are fully covered by `AGENTS.md` —
   but only if the user confirms.
@@ -410,11 +403,10 @@ clean: ## Remove build artifacts
    `## Conventions` contain project-specific conventions only (no universal
    rules)?
 2. Check `.claude/skills/` — symlink to `.pi/skills/`.
-3. Check that no `.pi/rules/` directory or `.claude/rules` symlink remains.
-4. Check `.pi/skills/` — canonical skills present.
-5. Check scaffolding: `.gitignore`, `.gitattributes`, `.editorconfig`,
+3. Check `.pi/skills/` — canonical skills present.
+4. Check scaffolding: `.gitignore`, `.gitattributes`, `.editorconfig`,
    `.env.example`.
-6. Run `git status` to review all changes.
+5. Run `git status` to review all changes.
 
 ## Edge cases
 
@@ -423,9 +415,6 @@ clean: ## Remove build artifacts
 - **`AGENTS.md` already exists and is populated:** Ask before overwriting.
 - **No `.pi/` directory:** Create it with `settings.json`.
 - **`.claude/` doesn't exist:** Create it with the skills symlink.
-- **A `.pi/rules/` directory exists:** Move genuinely project-specific rules
-  into `AGENTS.md` `## Conventions`, delete the universal ones, then remove
-  the directory and the `.claude/rules` symlink.
 - **`.editorconfig` indent differs from defaults:** Keep the project's existing
   indent size.
 - **Project is a Pi package** (`"pi.skills"` in `package.json`): Use `skills/`
