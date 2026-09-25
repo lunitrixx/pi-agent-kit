@@ -32,7 +32,7 @@ Skill tells main agent to delegate to a subagent.
 ### Skill + Extension
 Skill tells what, extension enforces it.
 - Skill: `grill-me/SKILL.md` → "interview until full understanding"
-- Extension: `lntrx-grill-me` → blocks writes, registers `grill_finish` tool, persists state
+- Extension: registers dedicated interview tools, blocks writes until the interview completes, persists state to disk
 
 ### Extension only
 When the agent can't be trusted to follow instructions alone.

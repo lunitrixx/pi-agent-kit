@@ -234,7 +234,7 @@ This is where you stop skimming and start *reading code*. Do not skip.
 
 ### Phase 8: Persist Knowledge
 
-30. **Save findings to lntrx-memory.** Use `lntrx_memory_learn` to persist:
+30. **Save findings to cross-session memory.** Use `ctx_index` to persist:
     - Technology stack and versions (category: convention)
     - Architecture pattern and boundary diagram (category: decision)
     - Key conventions (category: convention)
@@ -337,7 +337,7 @@ git clone <repo> && cd <project>
   phases 3-6 — CLAUDE.md usually doesn't cover code-level patterns.
 - **When the project has no documentation,** invest more time in phases 3-5.
 - **Never modify files during onboarding.** This is read-only analysis.
-- **Always persist.** The summary is nice, but `lntrx_memory_learn` entries
+- **Always persist.** The summary is nice, but `ctx_index` entries
   are what make future sessions productive. Save liberally.
 - **Know when to stop.** If you can trace the hot paths and you're not learning
   anything new, switch to contributing. More analysis has diminishing returns.

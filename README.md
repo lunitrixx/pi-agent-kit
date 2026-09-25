@@ -8,21 +8,11 @@ Pi-native toolkit providing extensions, skills, themes, prompts, and specialized
 pi install npm:@lunitrixx/pi-agent-kit
 ```
 
-### Extensions (12)
+### Extensions (2)
 | Extension | What |
 |---|---|
 | `lntrx-header` | Rainbow LUNITRIXX banner + system info |
-| `lntrx-lang` | `/lang de\|en` — response language |
-| `lntrx-grill-me` | Socratic planning interview with severity levels |
 | `lntrx-footer` | Token/cost/speed footer |
-| `lntrx-permit` | Permission system: path, tool, bash, external-directory surfaces with shell tokenizer |
-| `lntrx-githooks` | Git hooks (pre-commit main-block) — split from old lntrx-guard |
-| `lntrx-health` | `/health` — codebase health: TODOs, large files, model/cost summary |
-| `lntrx-localmodels` | Local LLM endpoint manager (`/local-models`) |
-| `lntrx-postwrite` | Auto-format + LSP diagnostics on write/edit (merged from lntrx-fmt + lntrx-lsp) |
-| `lntrx-memory` | Cross-session SQLite memory (v2): policy-mode, FTS5 search, anatomy scanning, bug tracking, auto-aging |
-| `lntrx-project-rules` | Inject `.pi/rules/` into system prompt + banner widget |
-| `lntrx-subagent-audit` | Makes a failed or missing subagent visible to its caller: model preflight, failed runs returned as tool errors, `require-reviewer` check, `/subagent-audit` |
 
 ### Skills (15)
 Auto-detected by Pi from your prompt.
