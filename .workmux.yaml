@@ -67,6 +67,7 @@ layouts:
   qwen:
     panes:
       - command: <agent:coder-qwen>
+        name: agent
         focus: true
 
 #-------------------------------------------------------------------------------
