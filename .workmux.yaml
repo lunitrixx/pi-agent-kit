@@ -46,8 +46,8 @@ agent: claude
 # An agent needs about 68 columns; below that it dies on "Rendered line 2 exceeds
 # terminal width", and at 80 columns any split leaves both halves under that.
 # There is also nothing to put in a second pane here - this repository has no dev
-# server, no watcher and no test runner that stays resident; the suite is six
-# scripts that run in a few seconds and exit.
+# server, no watcher and no test runner that stays resident; the merge checks are
+# short one-shot scripts that exit.
 panes:
   - command: <agent>
     name: agent
@@ -67,7 +67,7 @@ panes:
 # that its weakest language by LLM judge is JavaScript, with TypeScript at 36.1%.
 # Every extension in this repository is TypeScript, so `-l pi` belongs on the
 # bounded, checkable jobs - one skill, one prompt, one extension option - and
-# anything touching the loader wiring or a shared file under `lib/` goes to claude.
+# anything touching the loader wiring goes to claude.
 #
 # The profiles themselves (coder-pi, coder-claude) live in the global config,
 # because which model you drive and with whose credentials is a property of the
@@ -100,11 +100,10 @@ files:
   #   .envrc.local              the API keys. `.envrc.local-template` is committed
   #                             and documents exactly this file. See post_create for
   #                             why nothing loads it automatically yet.
-  #   .pi/pi-agent-kit.json     this kit's own per-project config - lib/config.ts
-  #                             reads and writes it, and the extensions toggle
-  #                             themselves through it. Copied, not shared: an agent
-  #                             that disables a widget in its worktree must not
-  #                             disable it in the main checkout.
+  #   .pi/pi-agent-kit.json     this kit's own per-project config. Copied, not
+  #                             shared: an agent that disables a widget in its
+  #                             worktree must not disable it in the main
+  #                             checkout.
   #   .claude/settings.local.json   the same thing for the Claude Code adapter.
   copy:
     - .envrc.local
@@ -116,7 +115,7 @@ files:
   # `node_modules` is the obvious candidate and is the one that must not be here.
   # The root package.json declares `workspaces: ["extensions/*"]`, so npm links
   # every extension into node_modules by name - a shared node_modules would make
-  # `lntrx-permit` in one worktree resolve to the *main checkout's* source, and an
+  # `lntrx-header` in one worktree resolve to the *main checkout's* source, and an
   # agent would then test code it is not editing. It is also written by
   # post_create's install, so two worktrees created at once would rewrite each
   # other's tree mid-install. Installing for real costs about three seconds against
@@ -154,21 +153,6 @@ post_create:
   # drifted apart instead of quietly fixing it. Measured at about three seconds.
   - npm ci
 
-  # The test runner, and the reason it is installed rather than depended on.
-  #
-  # The test files are TypeScript that imports its own modules with `.js`
-  # specifiers. Node 24 runs `.ts` natively but does not rewrite those specifiers,
-  # so `node extensions/lntrx-permit/tests/shell.test.ts` dies with
-  # ERR_MODULE_NOT_FOUND on `src/shell.js` - which reads like broken code and is
-  # not. tsx resolves them, and the header of every test file already documents
-  # `npx tsx <file>` as the way to run it.
-  #
-  # `--no-save` because tsx is not a dependency of this package and must not become
-  # one by accident: AGENTS.md says dependencies are not changed without approval,
-  # and this leaves package.json and package-lock.json untouched (verified - the
-  # tree stays clean afterwards).
-  - npm install --no-save tsx
-
 # The checks, cheapest first. Any failure aborts the merge.
 #
 # THE ODDITY FIRST, because it explains the shape of this list: this repository has
@@ -189,7 +173,7 @@ post_create:
 pre_merge:
   # The manifest check, and the one failure this repository ships silently.
   #
-  # package.json is a list of paths - eleven extensions, the skills directory, the
+  # package.json is a list of paths - two extensions, the skills directory, the
   # themes directory - and nothing at load time tells you that one of them is a
   # typo except the extension quietly not being there. Renaming a directory without
   # editing package.json is a one-line mistake that no test catches. Half a second.
@@ -197,25 +181,8 @@ pre_merge:
     node -e "const fs=require('node:fs');const j=JSON.parse(fs.readFileSync('package.json','utf8'));const paths=[...j.pi.extensions,...j.pi.skills,...j.pi.themes];const missing=paths.filter(p=>!fs.existsSync(p));if(missing.length){console.error('pi manifest points at missing paths: '+missing.join(', '));process.exit(1)}console.log('pi manifest ok: '+paths.length+' paths')"
 
   # Re-run from the lockfile, because the branch may have changed it since
-  # post_create. This is also why tsx is installed again on the next line: `npm ci`
-  # deletes node_modules wholesale, and it takes the --no-save install with it.
+  # post_create.
   - npm ci
-  - npm install --no-save tsx
-
-  # The suite. Six files, roughly 150 assertions, a few seconds in total.
-  #
-  # A loop over globs rather than a list of filenames, so a test added under
-  # `tests/` or under any extension is picked up without editing this file - which
-  # matters more than usual here, because there is no `npm test` script to keep in
-  # sync and this hook is the only place the suite is enumerated at all.
-  #
-  # `|| exit 1` is load-bearing: without it the loop swallows a failing file and
-  # the hook exits with the status of the last test rather than the worst one.
-  # `npx --yes` suppresses the install prompt in the case where post_create did not
-  # run; with post_create having run, npx resolves the local tsx and fetches
-  # nothing.
-  - >-
-    for f in tests/*.test.ts extensions/*/tests/*.test.ts; do echo "--- $f"; npx --yes tsx "$f" || exit 1; done
 
 # pre_remove is deliberately ABSENT rather than empty, and the difference matters.
 #
