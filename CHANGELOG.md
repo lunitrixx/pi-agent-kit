@@ -11,6 +11,10 @@
   conventions moved to the global system prompt (`~/.pi/agent/APPEND_SYSTEM.md`),
   and cross-session memory is provided by `context-mode`. The extension sources
   were removed from the repository.
+- The `.pi/rules/` directory and the `.claude/rules` symlink: the universal
+  commit, PR, workflow, and writing-style rules they carried are fully covered
+  by the global system prompt (`~/.pi/agent/APPEND_SYSTEM.md`), and the
+  `lntrx-project-rules` extension that injected them no longer exists.
 
 ## 0.4.0 - 2026-08-08
 
