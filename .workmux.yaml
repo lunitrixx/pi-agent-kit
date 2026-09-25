@@ -12,8 +12,8 @@
 # `workmux config reference` prints every option with its documentation.
 
 # The default branch, read rather than guessed: `origin/HEAD` resolves to
-# refs/remotes/origin/main, and `.pi/rules/workflow.md` forbids committing to it
-# directly at all - every change goes through a branch and a pull request.
+# refs/remotes/origin/main, and the global agent conventions forbid committing
+# to it directly at all - every change goes through a branch and a pull request.
 #
 # Named rather than `auto`. `auto` is a resolution chain (main_branch, origin/HEAD,
 # main, master) that lands on the same branch while costing a reader a lookup.
