@@ -9,14 +9,14 @@ description: >-
 # README Generator
 
 Generate a comprehensive, accurate README.md from the project's actual code.
-Never guess — read the codebase, test every command, preserve existing content.
+Never guess - read the codebase, test every command, preserve existing content.
 
 ## Process
 
-1. **Read the codebase** — check manifests (`package.json`, `pyproject.toml`,
+1. **Read the codebase** - check manifests (`package.json`, `pyproject.toml`,
    `go.mod`, etc.), entry points, exported APIs, CLI commands.
 
-2. **Read existing README** — preserve all hand-written sections. Only add
+2. **Read existing README** - preserve all hand-written sections. Only add
    what's missing, never delete what's there.
 
 3. **Generate structure:**
@@ -65,10 +65,10 @@ Never guess — read the codebase, test every command, preserve existing content
 
    ## License
 
-   <LICENSE-NAME> — see [LICENSE](LICENSE) file.
+   <LICENSE-NAME> - see [LICENSE](LICENSE) file.
    ```
 
-4. **Add badges** — pick the right ones for the detected stack:
+4. **Add badges** - pick the right ones for the detected stack:
 
    | Stack | Badge source |
    |---|---|
@@ -79,12 +79,12 @@ Never guess — read the codebase, test every command, preserve existing content
    | License | `https://img.shields.io/badge/license-<LICENSE>-blue` |
    | CI | `https://github.com/<owner>/<repo>/actions/workflows/<workflow>/badge.svg` |
 
-5. **Verify** — actually run every command in the README. If a command fails,
+5. **Verify** - actually run every command in the README. If a command fails,
    fix the README. Never commit untested instructions.
 
 ## Rules
 
-- **Read the actual code — never guess or template-fill.** Every command, every
+- **Read the actual code - never guess or template-fill.** Every command, every
   API example, every configuration snippet must come from the real codebase.
 - **Preserve hand-written content.** Only add missing sections. Never delete
   existing prose.

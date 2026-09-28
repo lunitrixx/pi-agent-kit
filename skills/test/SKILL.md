@@ -8,33 +8,33 @@ description: >-
 # Test Generation
 
 Write tests for existing code following the project's test conventions.
-Match the project's patterns exactly — a Jest `describe/it` project should
+Match the project's patterns exactly - a Jest `describe/it` project should
 never get pytest-style tests.
 
 ## Process
 
-1. **Read the source file** — understand inputs, outputs, side effects, error paths.
-2. **Find existing tests** — read 2-3 test files to learn patterns:
+1. **Read the source file** - understand inputs, outputs, side effects, error paths.
+2. **Find existing tests** - read 2-3 test files to learn patterns:
    - Framework (Jest, pytest, go test, cargo test, etc.)
    - Structure (describe/it, test functions, table-driven, parameterized)
    - Assertion style (expect, assert, should)
    - Mock/fixture strategy (jest.mock, pytest fixtures, factory functions)
-3. **Find the test command** — check `package.json` scripts, `Makefile`,
+3. **Find the test command** - check `package.json` scripts, `Makefile`,
    `pyproject.toml`, or CI config.
 4. **Write tests covering:**
-   - **Happy path** — normal inputs produce expected outputs
-   - **Edge cases** — empty input, null/undefined, boundary values, large inputs
-   - **Error paths** — invalid input, missing dependencies, network failures
-   - **State changes** — side effects, mutations, event emissions
-5. **Run the tests** — execute the test command. If anything fails, fix it.
+   - **Happy path** - normal inputs produce expected outputs
+   - **Edge cases** - empty input, null/undefined, boundary values, large inputs
+   - **Error paths** - invalid input, missing dependencies, network failures
+   - **State changes** - side effects, mutations, event emissions
+5. **Run the tests** - execute the test command. If anything fails, fix it.
    Never commit broken tests.
 
 ## Test Structure (AAA Pattern)
 
 ```
-Arrange   — set up data, mocks, fixtures
-Act       — call the function/method under test
-Assert    — verify the result
+Arrange   - set up data, mocks, fixtures
+Act       - call the function/method under test
+Assert    - verify the result
 ```
 
 Every test should follow this pattern. If the three phases aren't clearly
@@ -149,12 +149,12 @@ mod tests {
 ## Mocking Rules
 
 - **Mock at the boundary, not internally.** Mock the database, HTTP client,
-  file system — not your own service classes.
+  file system - not your own service classes.
 - **Use the project's mocking library.** Don't introduce a new one.
 - **One mock per test where possible.** Too many mocks = the code under test
   has too many dependencies.
 - **Verify mock interactions sparingly.** Only verify calls that are
-  essential to the behavior — not every internal call.
+  essential to the behavior - not every internal call.
 - **Prefer real dependencies for integration tests.** Test DB via Docker,
   in-memory SQLite, or test containers. Fake data beats mocked data.
 
@@ -163,7 +163,7 @@ mod tests {
 - **Match existing patterns exactly.** Same framework, same structure, same
   assertion style. A project with `describe/it` should never get `test()`.
 - **One assertion concept per test.** "It creates a user" is one concept.
-  "It creates a user AND sends a welcome email" is two — split it.
+  "It creates a user AND sends a welcome email" is two - split it.
 - **Test behavior, not implementation.** Test what the function returns and
   what side effects it has. Don't test that it called `console.log`.
 - **Never commit broken tests.** Run the test command before finishing.

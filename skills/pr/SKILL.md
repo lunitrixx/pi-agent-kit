@@ -8,7 +8,7 @@ description: >-
 # Pull Request
 
 Generate a structured PR description that gives reviewers everything they
-need to approve quickly — context, changes, testing evidence, and deployment
+need to approve quickly - context, changes, testing evidence, and deployment
 notes. Never open the PR without explicit confirmation.
 
 ## Format
@@ -43,9 +43,9 @@ notes. Never open the PR without explicit confirmation.
 
 1. Run `git log main..HEAD --oneline` to see commits.
 2. Run `git diff main..HEAD --stat` to see changed files.
-3. Group changes into a bullet list — one bullet per logical change, not per file.
+3. Group changes into a bullet list - one bullet per logical change, not per file.
 4. Read the diff for any new env vars, config changes, or breaking API changes.
-5. Test the change if a test command exists — include the output in `## Testing`.
+5. Test the change if a test command exists - include the output in `## Testing`.
 6. Show the description to the user. **Do NOT open the PR.**
 
 ## Rules

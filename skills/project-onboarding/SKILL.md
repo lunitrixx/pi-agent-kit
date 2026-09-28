@@ -6,7 +6,7 @@ description: Analyze a project to understand its structure, conventions, entry p
 # Project Onboarding
 
 Build a comprehensive mental model of an unfamiliar project. The goal is
-mastery from the first session — the agent should understand not just *where*
+mastery from the first session - the agent should understand not just *where*
 things are, but *how* the code works, *why* decisions were made, *what*
 patterns govern every layer of the stack, and *where* the system breaks
 under pressure.
@@ -17,12 +17,12 @@ under pressure.
 - User asks "what does this project do?", "how is this structured?", or "give
   me an overview"
 - User says "I'm new to this codebase", "orient me", or "onboard me"
-- After a long pause — to refresh the mental model
+- After a long pause - to refresh the mental model
 
 ## Workflow
 
 Execute in order. Skip inapplicable steps (no git, no package.json). Report
-back with a structured summary after each phase. **This is read-only — never
+back with a structured summary after each phase. **This is read-only - never
 modify files.**
 
 ### Phase 1: Identity & Context
@@ -63,19 +63,19 @@ what the system talks to and how.
 
 8. **Draw a boundary diagram.**
    ```
-   ┌──────────────────────────────┐
-   │         Your System          │
-   │                              │
-   │  ┌────────┐    ┌─────────┐  │
-   │  │  HTTP  │    │  Worker │   │
-   │  └───┬────┘    └────┬────┘  │
-   │      │              │        │
-   └──────┼──────────────┼────────┘
-          │              │
-     ┌────┴────┐    ┌────┴────┐
-     │ Postgres │    │  Redis  │
-     │  :5432   │    │  :6379  │
-     └─────────┘    └─────────┘
+   +------------------------------+
+   |         Your System          |
+   |                              |
+   |  +--------+    +---------+  |
+   |  |  HTTP  |    |  Worker |   |
+   |  +---+----+    +----+----+  |
+   |      |              |        |
+   +------+--------------+--------+
+          |              |
+     +----+----+    +----+----+
+     | Postgres |    |  Redis  |
+     |  :5432   |    |  :6379  |
+     +---------+    +---------+
    ```
    Label each connection with its protocol (HTTP, gRPC, SQL, AMQP, Redis).
    This diagram anchors everything that follows.
@@ -95,7 +95,7 @@ This is where you stop skimming and start *reading code*. Do not skip.
 10. **Identify the top 3-5 business-critical flows.** Ask: what actions do
     users perform most? Login, checkout, search, dashboard, data export? These
     hot paths are where the business would feel pain first if something broke.
-    Prioritize them — read hot paths before cold ones.
+    Prioritize them - read hot paths before cold ones.
 
 11. **Read key source files from different layers.** Pick 3-5 representative
     files (API handler, service/business logic, data access, utility). Read
@@ -110,20 +110,20 @@ This is where you stop skimming and start *reading code*. Do not skip.
     file it touches. Document the call chain in a compact trace notation:
     ```
     POST /api/orders
-      → OrderController.create()
-         → OrderService.createOrder()
-            → validates input (Zod schema)
-            → checks inventory (InventoryService.check())
-            → creates record (prisma.order.create())
-            → publishes event (EventBus.publish("order.created"))
-         ← { orderId, status }
-      ← 201 Created
+      -> OrderController.create()
+         -> OrderService.createOrder()
+            -> validates input (Zod schema)
+            -> checks inventory (InventoryService.check())
+            -> creates record (prisma.order.create())
+            -> publishes event (EventBus.publish("order.created"))
+         <- { orderId, status }
+      <- 201 Created
     ```
     A text-based trace is worth more than reading 50 disconnected files.
 
 13. **Read the data model.** Find the schema definitions, type definitions,
     or database migrations. Read every table/collection and its relationships.
-    The data model is the closest thing to ground truth — code can lie, but
+    The data model is the closest thing to ground truth - code can lie, but
     the database schema rarely does. Draw an entity diagram.
 
 14. **Analyze the dependency graph.** List all direct dependencies. For each
@@ -136,18 +136,18 @@ This is where you stop skimming and start *reading code*. Do not skip.
     it control? What does it export to other modules?
     ```
     src/
-      auth/       → Owns: users, sessions, permissions
-      orders/     → Owns: orders, line items, order status
-      payments/   → Owns: payment records, refunds
+      auth/       -> Owns: users, sessions, permissions
+      orders/     -> Owns: orders, line items, order status
+      payments/   -> Owns: payment records, refunds
     ```
 
 16. **Check inter-module dependencies.** Which modules import which? Run grep
     to find cross-module imports. Look for circular dependencies (auth imports
     from orders AND orders imports from auth? That's an architectural smell.)
-    Check if the dependency direction is clean (UI → Business Logic → Data).
+    Check if the dependency direction is clean (UI -> Business Logic -> Data).
 
 17. **Identify architecture patterns.** From the code you read, determine:
-    - Is this layered (controller → service → repository)?
+    - Is this layered (controller -> service -> repository)?
     - Hexagonal/ports-and-adapters?
     - Event-driven?
     - Monolith or microservices?
@@ -175,7 +175,7 @@ This is where you stop skimming and start *reading code*. Do not skip.
 
 21. **Test the tests (mutation check).** Pick one test file. Mentally note
     what behavior it asserts. Now imagine breaking the corresponding source
-    code — would this test catch it? Tests that are too permissive or test
+    code - would this test catch it? Tests that are too permissive or test
     only the happy path are a risk signal.
 
 ### Phase 6: History & Fragility
@@ -222,14 +222,14 @@ This is where you stop skimming and start *reading code*. Do not skip.
 28. **Inspect runtime configuration.** Check `.env.example`, config files,
     `docker-compose.yml`, `Dockerfile`. Note required services (database,
     cache, queue) and environment variables. If Docker Compose exists, consider
-    asking the user to run it — seeing the system live is 10x more informative
+    asking the user to run it - seeing the system live is 10x more informative
     than reading config files.
 
 ### Phase 7: Research Unknowns
 
 29. **Look up unfamiliar technology.** For any framework, library, or tool
     encountered that is not immediately obvious, do a web search. Get the
-    official docs landing page — not to read everything, but to understand
+    official docs landing page - not to read everything, but to understand
     its purpose, API surface, and relationship to the project stack.
 
 ### Phase 8: Persist Knowledge
@@ -259,7 +259,7 @@ enough" threshold when:
 
 At that point, open a branch and make the smallest deliberate move. Add a
 test around a fragile path. Introduce a guardrail. Don't attempt a rewrite
-— make one safe, reversible change and reassess.
+- make one safe, reversible change and reassess.
 
 ## Summary Template
 
@@ -289,7 +289,7 @@ After all phases, present:
 | <name> | <ver> | <what> | <reason from research> |
 
 ### Critical Flow Trace
-<entry-point> → <middleware/gate> → <service> → <repository> → <database>
+<entry-point> -> <middleware/gate> -> <service> -> <repository> -> <database>
 
 ### Fragile Areas (from git churn)
 | File | Churn (6mo) | Pattern | Risk |
@@ -334,7 +334,7 @@ git clone <repo> && cd <project>
 - **Search the web for unknowns.** Don't guess what an unfamiliar library does.
   Look it up and cite your source.
 - **If a CLAUDE.md is thorough,** keep phases 1-2 lighter and go deeper on
-  phases 3-6 — CLAUDE.md usually doesn't cover code-level patterns.
+  phases 3-6 - CLAUDE.md usually doesn't cover code-level patterns.
 - **When the project has no documentation,** invest more time in phases 3-5.
 - **Never modify files during onboarding.** This is read-only analysis.
 - **Always persist.** The summary is nice, but `ctx_index` entries

@@ -18,13 +18,13 @@ Manage semantic versioning and changelogs for this project.
 
 ## Changelog Sections
 
-- `## Unreleased` — pending changes (top of file, replaced on version bump)
-- `Added` — new features
-- `Changed` — changes in existing functionality
-- `Deprecated` — soon-to-be removed features
-- `Removed` — removed features
-- `Fixed` — bug fixes
-- `Security` — vulnerability fixes
+- `## Unreleased` - pending changes (top of file, replaced on version bump)
+- `Added` - new features
+- `Changed` - changes in existing functionality
+- `Deprecated` - soon-to-be removed features
+- `Removed` - removed features
+- `Fixed` - bug fixes
+- `Security` - vulnerability fixes
 
 ## Workflow
 
@@ -42,10 +42,10 @@ Manage semantic versioning and changelogs for this project.
 
 1. Run `git log <last-tag>..HEAD --oneline --no-merges`.
 2. Group commits by conventional commit type:
-   - `feat` → `Added`
-   - `fix` → `Fixed`
-   - `refactor`, `chore`, `test` → `Changed`
-   - `BREAKING CHANGE:` footer or `!` after type → `Changed` + breaking note
+   - `feat` -> `Added`
+   - `fix` -> `Fixed`
+   - `refactor`, `chore`, `test` -> `Changed`
+   - `BREAKING CHANGE:` footer or `!` after type -> `Changed` + breaking note
 3. Write entries in past tense, user-facing language.
 4. Do NOT list every commit - curate notable changes.
 

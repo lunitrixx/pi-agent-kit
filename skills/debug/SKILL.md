@@ -11,16 +11,16 @@ Systematically find and fix bugs.
 
 ## Process
 
-1. **Reproduce** — can you trigger the bug reliably?
-2. **Isolate** — narrow to file, function, line.
+1. **Reproduce** - can you trigger the bug reliably?
+2. **Isolate** - narrow to file, function, line.
 3. **Search memory** - check cross-session memory (ctx_search) for known issues.
-4. **Plan the fix:** `/parallel planner` — "Fix <bug description> in <file>."
+4. **Plan the fix:** `/parallel planner` - "Fix <bug description> in <file>."
 5. **Execute:** `/parallel worker` to implement the fix.
-6. **Verify** — does it work? Add regression test.
+6. **Verify** - does it work? Add regression test.
 
 ## Rules
 
-- Read error messages carefully — the answer is often in the stack trace.
+- Read error messages carefully - the answer is often in the stack trace.
 - Check git log for recent changes to the failing area.
 - Search cross-session memory (ctx_search) for known issues.
 - One fix at a time. Don't shotgun-debug.
