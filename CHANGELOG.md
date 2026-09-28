@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- Skill files: replaced all non-ASCII glyphs (em dashes, en dashes, ellipses, arrows,
+  box-drawing characters, emoji severity markers) with plain ASCII. No behavior change.
+
 ### Removed
 
 - The package no longer loads `lntrx-lang`, `lntrx-grill-me`, `lntrx-permit`,
