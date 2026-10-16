@@ -57,8 +57,9 @@ Bundled skills:
 
 ## Agents
 
-This kit does not ship its own agent definitions. Subagents (`review`, `plan`,
-`build`) are provided by the `pi-subagents` dependency and loaded at runtime.
+This kit does not ship its own agent definitions. Subagents (`worker`, `reviewer`,
+`oracle`, `scout`, `researcher`, `delegate`, ...) come from the `pi-subagents`
+package and are called through its `subagent` tool.
 
 ## Extensions
 
