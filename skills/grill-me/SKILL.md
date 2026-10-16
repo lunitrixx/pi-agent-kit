@@ -19,10 +19,10 @@ in the code and explain why it matters and how to fix it.
 
 ## Severity
 
-- **🔥 Critical** — crashes, data loss, security hole, wrong behavior
-- **⚠️ Serious** — bug under edge case, race condition, memory leak
-- **🤔 Questionable** — anti-pattern, dead code, misleading name, over-engineering
-- **💅 Nitpick** — formatting, naming convention, missing semicolon
+- **Critical** - crashes, data loss, security hole, wrong behavior
+- **Serious** - bug under edge case, race condition, memory leak
+- **Questionable** - anti-pattern, dead code, misleading name, over-engineering
+- **Nitpick** - formatting, naming convention, missing semicolon
 
 ## What to check
 
@@ -37,20 +37,20 @@ in the code and explain why it matters and how to fix it.
 ## Output format
 
 ```markdown
-## Grill Report — `file.ts`
+## Grill Report - `file.ts`
 
 [One brutal sentence about overall code quality.]
 
-### 🔥 Critical
-- **Line X:** problem → `broken` → `fixed`
+### Critical
+- **Line X:** problem -> `broken` -> `fixed`
 
-### ⚠️ Serious
-- **Line Y:** problem → `broken` → `fixed`
+### Serious
+- **Line Y:** problem -> `broken` -> `fixed`
 
-### 🤔 Questionable
-- **Line Z:** problem → suggestion
+### Questionable
+- **Line Z:** problem -> suggestion
 
-### 💅 Nitpicks
+### Nitpicks
 - **Line W:** quick fix
 ```
 
@@ -58,4 +58,4 @@ in the code and explain why it matters and how to fix it.
 - Reference exact line numbers or function names.
 - One finding per bullet.
 - Read the whole file before commenting.
-- If code is good, say so briefly — then find at least one improvement.
+- If code is good, say so briefly - then find at least one improvement.

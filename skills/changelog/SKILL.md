@@ -35,5 +35,5 @@ Generate a user-facing changelog entry from recent git history.
 
 1. Run `git log` since the last release/tag.
 2. Group changes by type (Added, Changed, Fixed).
-3. Write user-facing descriptions — no technical jargon.
+3. Write user-facing descriptions - no technical jargon.
 4. Update or create `CHANGELOG.md`.

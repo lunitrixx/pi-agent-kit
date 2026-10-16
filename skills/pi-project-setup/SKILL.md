@@ -78,28 +78,28 @@ skills live in a top-level `skills/` directory instead:
 Run these checks in parallel:
 
 1. **Determine project type** from package manifests:
-   - `flake.nix` → Nix
-   - `package.json` → Node / Pi package
-   - `pyproject.toml` → Python
-   - `Cargo.toml` → Rust
-   - `go.mod` → Go
+   - `flake.nix` -> Nix
+   - `package.json` -> Node / Pi package
+   - `pyproject.toml` -> Python
+   - `Cargo.toml` -> Rust
+   - `go.mod` -> Go
    - etc.
 
    If `package.json` has a `"pi.skills"` field, the project is a Pi package.
 
 2. **Decide new vs. existing:**
-   - If the directory is empty or has no meaningful files → **new project**
-   - If it has source code, a README, or a git repo → **existing project**
+   - If the directory is empty or has no meaningful files -> **new project**
+   - If it has source code, a README, or a git repo -> **existing project**
 
 3. **For existing projects, find agent instructions:**
    - `CLAUDE.md`, `AGENTS.md`, `CURSOR.md`, `.cursorrules`, `.github/copilot-instructions.md`
    - Read every one that exists fully.
 
 4. **Check agent directories:**
-   - `.claude/skills/` — real skills, symlink, or directory?
-   - `.pi/skills/` — exists?
-   - `.pi/` — `settings.json`?
-   - `.github/` — PR template, issue templates?
+   - `.claude/skills/` - real skills, symlink, or directory?
+   - `.pi/skills/` - exists?
+   - `.pi/` - `settings.json`?
+   - `.github/` - PR template, issue templates?
 
 5. **Check scaffolding files:**
    - `.editorconfig`, `.gitignore`, `.gitattributes`, `.env.example`, `LICENSE.md`
@@ -128,7 +128,7 @@ Ask for confirmation before touching anything.
 
 ### Step 1: Set up `AGENTS.md`
 
-**For new projects** — scaffold from scratch:
+**For new projects** - scaffold from scratch:
 
 ```markdown
 # AGENTS.md
@@ -164,7 +164,7 @@ CLAUDE.md             # Claude Code adapter, points back to AGENTS.md
 
 ## Project
 
-**<project-name>** — <one-line description>
+**<project-name>** - <one-line description>
 
 **Tech stack:** <language/framework>
 
@@ -177,7 +177,7 @@ provided by the global system prompt - never write them into this file.
 <!-- Add project-specific conventions here as they emerge. -->
 ```
 
-**For existing projects** — extract from the current agent instructions
+**For existing projects** - extract from the current agent instructions
 (usually `CLAUDE.md`). Use the same template structure but fill `## Project`
 and `## Conventions` from the existing content.
 
@@ -204,7 +204,7 @@ Extraction rules:
 ```
 
 If an old `CLAUDE.md` had Claude-specific config (sandbox settings, env vars,
-plugin config), those live in `.claude/settings.json` — keep them there, do not
+plugin config), those live in `.claude/settings.json` - keep them there, do not
 copy into the new `CLAUDE.md`.
 
 The `@AGENTS.md` reference is Claude Code's native include mechanism. Pi reads
@@ -244,12 +244,12 @@ Ensure it has at least:
 }
 ```
 
-Pi auto-discovers `.pi/skills/` — no explicit entry needed. Preserve any
+Pi auto-discovers `.pi/skills/` - no explicit entry needed. Preserve any
 existing keys beyond `skills`.
 
 ### Step 5: Scaffolding files (create if missing)
 
-**`.gitignore`** — for new projects, create full stack-specific gitignore.
+**`.gitignore`** - for new projects, create full stack-specific gitignore.
 For existing projects, only append agent/scaffolding entries:
 
 ```
@@ -321,7 +321,7 @@ build/
 *.pdf binary
 ```
 
-**`.editorconfig`** (if missing, or only for new projects — ask for existing):
+**`.editorconfig`** (if missing, or only for new projects - ask for existing):
 ```ini
 # EditorConfig is awesome: https://editorconfig.org
 root = true
@@ -360,7 +360,7 @@ user if not obvious from existing files (git config, README author).
 }
 ```
 
-**`Makefile`** or **`justfile`** — for new projects only. Ask which task runner
+**`Makefile`** or **`justfile`** - for new projects only. Ask which task runner
 the user prefers. Create a minimal one:
 
 ```makefile
@@ -391,19 +391,19 @@ clean: ## Remove build artifacts
 
 ### Step 6: Remove obsolete files
 
-- `skills-lock.json` — Skills are now in `.pi/skills/`, tracked by git.
+- `skills-lock.json` - Skills are now in `.pi/skills/`, tracked by git.
 - `.claude/skills/` old contents (replaced by symlink).
 - Any duplicate agent instruction files (`.cursorrules`,
-  `.github/copilot-instructions.md`) that are fully covered by `AGENTS.md` —
+  `.github/copilot-instructions.md`) that are fully covered by `AGENTS.md` -
   but only if the user confirms.
 
 ## Phase 4: Verify
 
-1. Read back `AGENTS.md` — is all project-specific info preserved, and does
+1. Read back `AGENTS.md` - is all project-specific info preserved, and does
    `## Conventions` contain project-specific conventions only (no universal
    rules)?
-2. Check `.claude/skills/` — symlink to `.pi/skills/`.
-3. Check `.pi/skills/` — canonical skills present.
+2. Check `.claude/skills/` - symlink to `.pi/skills/`.
+3. Check `.pi/skills/` - canonical skills present.
 4. Check scaffolding: `.gitignore`, `.gitattributes`, `.editorconfig`,
    `.env.example`.
 5. Run `git status` to review all changes.
@@ -420,5 +420,5 @@ clean: ## Remove build artifacts
 - **Project is a Pi package** (`"pi.skills"` in `package.json`): Use `skills/`
   instead of `.pi/skills/` as the canonical skills directory. Symlink targets
   adjust accordingly.
-- **CI/CD references agent files:** Check `.github/workflows/` — if any
+- **CI/CD references agent files:** Check `.github/workflows/` - if any
   workflow reads `CLAUDE.md` or skills paths, update them.
