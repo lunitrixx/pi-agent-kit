@@ -1,76 +1,23 @@
 ---
 name: extend-pi
-description: >-
-  Decide and create the right Pi extension type for a given task. Use when
-  the user asks to "extend Pi", "add a feature to Pi", "build something for
-  Pi", "create a skill/extension/agent/prompt", or "how do I add X to Pi".
+description: Pick and build the right Pi extension type (skill, extension, agent, prompt). Use for "extend Pi", "add a feature to Pi", "create a skill/extension/agent/prompt", "how do I add X to Pi".
 ---
 
 # Extend Pi
 
-Decide what Pi needs - skill, extension, agent, or prompt - then build it.
-
-## Decision tree
-
-Ask yourself: does this need...
-
-| Need | Use | Example |
+| Need | Build | Example |
 |---|---|---|
-| Only instructions for the agent | **Skill** | "how to write commits" |
-| State, tools, events, TUI, blocking | **Extension** | "block rm -rf", "show LSP errors" |
-| Isolated worker with model+tool limits | **Agent** | "review this code", "plan a feature" |
-| User-facing text template | **Prompt** | "PR template", "commit format"
-| _(Prompts are usually redundant - skills auto-detect)_ | | |
+| Instructions only | Skill | how to write commits |
+| State, tools, events, TUI, blocking | Extension | block `rm -rf`, show LSP errors |
+| Isolated worker with model/tool limits | Agent | review code, plan a feature |
+| User-invoked text template (`/prompt:name`) | Prompt | rarely needed - skills trigger themselves |
 
-## Common patterns
+Combine when useful: a skill that delegates to an agent; a skill that says what and an extension that enforces it (e.g. blocks writes until a step is done); an extension alone when the model cannot be trusted to follow instructions.
 
-### Skill + Agent
-Skill tells main agent to delegate to a subagent.
-- Skill: `debug/SKILL.md` -> "use /parallel planner, then /parallel worker"
-- Agent: `plan.md` + `build.md` -> worker personas with constrained tools
+## Layout
 
-### Skill + Extension
-Skill tells what, extension enforces it.
-- Skill: `grill-me/SKILL.md` -> "interview until full understanding"
-- Extension: registers dedicated interview tools, blocks writes until the interview completes, persists state to disk
+- Skill `skills/<name>/SKILL.md`: frontmatter `name`, `description` (what + when to trigger), then step-by-step instructions.
+- Extension `extensions/<name>/`: `package.json` `{ name, type: "module", pi: { extensions: ["./src/extension.ts"] } }`, `src/extension.ts` `export default function (pi: ExtensionAPI) { ... }`. Register it in the package's `pi.extensions`.
+- Agent `agents/<name>.md`: frontmatter `name`, `description`, `tools` (e.g. `read, grep, find, ls`), `model`, then instructions.
 
-### Extension only
-When the agent can't be trusted to follow instructions alone.
-- `lntrx-safety` - blocks dangerous commands before they execute
-- `lntrx-lsp` - subprocess management, file watching
-
-### Prompt only
-Pure text template, no logic needed. Skills auto-detect, so standalone prompts are rarely needed - but they exist for explicit `/prompt:name` invocation.
-
-## Building
-
-### Skill: `skills/<name>/SKILL.md`
-```markdown
----
-name: my-skill
-description: What it does and when Pi should activate it.
----
-
-# Title
-Step-by-step instructions.
-```
-
-### Extension: `extensions/<name>/`
-```
-package.json -> { name, type: "module", pi: { extensions: ["./src/extension.ts"] } }
-src/extension.ts -> export default function(pi: ExtensionAPI) { ... }
-```
-
-### Agent: `agents/<name>.md`
-```markdown
----
-name: my-agent
-description: What it does
-tools: read, grep, find, ls
-model: claude-sonnet-4-5
----
-# Instructions
-```
-
-### Add to package.json
-New extensions go in `pi.extensions` array. Skills auto-discover from `skills/`. Agents from `agents/`.
+Skills and agents are auto-discovered from `skills/` and `agents/`. Read the Pi docs (path in the system prompt) before writing extension code.

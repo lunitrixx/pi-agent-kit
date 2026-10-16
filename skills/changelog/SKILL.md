@@ -1,39 +1,18 @@
 ---
 name: changelog
-description: >-
-  Write or update a changelog from git history. Use when the user asks to
-  "write a changelog", "update CHANGELOG.md", or "summarize recent changes".
+description: Write or update CHANGELOG.md from git history. Use for "write a changelog", "update CHANGELOG.md", "summarize recent changes".
 ---
 
 # Changelog
 
-Generate a user-facing changelog entry from recent git history.
-
-## Format
+1. `git log` since the last release tag.
+2. Group into Added / Changed / Fixed / Removed; omit empty groups.
+3. Describe each change for users, without technical jargon.
+4. Update or create `CHANGELOG.md`. Entries go under the heading of the day of the change, newest on top; reuse the heading if that day already has one, never `## Unreleased`. A release is `## X.Y.Z - YYYY-MM-DD`.
 
 ```
-## <version> (<YYYY-MM-DD>)
+## YYYY-MM-DD
 
 ### Added
-
-- <new features>
-
-### Changed
-
-- <behavior changes>
-
-### Fixed
-
-- <bug fixes>
-
-### Removed
-
-- <removed features>
+- ...
 ```
-
-## Process
-
-1. Run `git log` since the last release/tag.
-2. Group changes by type (Added, Changed, Fixed).
-3. Write user-facing descriptions - no technical jargon.
-4. Update or create `CHANGELOG.md`.

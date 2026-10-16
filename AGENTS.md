@@ -57,12 +57,11 @@ Bundled skills:
 
 ## Agents
 
-This kit does not ship its own agent definitions. Subagents (`review`, `plan`,
-`build`) are provided by the `pi-subagents` dependency and loaded at runtime.
+This kit does not ship its own agent definitions. Subagents (`worker`, `reviewer`,
+`oracle`, `scout`, `researcher`, `delegate`, ...) come from the `pi-subagents`
+package and are called through its `subagent` tool.
 
 ## Extensions
 
 The package manifest (`pi.extensions` in `package.json`) loads only
-`lntrx-header` and `lntrx-footer` (rainbow header + status bar). Durable agent
-conventions live in the global system prompt (`~/.pi/agent/APPEND_SYSTEM.md`),
-and cross-session memory is provided by the `context-mode` package.
+`lntrx-header` and `lntrx-footer` (rainbow header + status bar).
