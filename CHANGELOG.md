@@ -1,30 +1,40 @@
 # Changelog
 
-## Unreleased
+## 2026-10-16
 
 ### Changed
 
-- Skill files: replaced all non-ASCII glyphs (em dashes, en dashes, ellipses, arrows,
-  box-drawing characters, emoji severity markers) with plain ASCII. No behavior change.
 - Skill files rewritten for brevity (54 KB to 23 KB in total, shorter descriptions);
   every step and rule is kept. References to things that no longer exist were
   replaced: `/parallel planner|worker|reviewer` now means the `subagent` tool with
   `worker` or `reviewer`, and `/memory scan`, `ctx_search` and `ctx_index` now point
   at the vault ledger and `stack-knowledge/`, which the global rules name as the only memory.
+- Changelog entries go under a `## YYYY-MM-DD` heading per day instead of
+  `## Unreleased`; the `changelog` and `version-management` skills follow this.
+
+### Removed
+
+- AGENTS.md no longer describes the global system prompt; it is always loaded and
+  is not part of this project.
+
+## 2026-09-28
+
+### Changed
+
+- Skill files: replaced all non-ASCII glyphs (em dashes, en dashes, ellipses, arrows,
+  box-drawing characters, emoji severity markers) with plain ASCII. No behavior change.
+
+## 2026-09-25
 
 ### Removed
 
 - The package no longer loads `lntrx-lang`, `lntrx-grill-me`, `lntrx-permit`,
   `lntrx-githooks`, `lntrx-health`, `lntrx-localmodels`, `lntrx-memory`,
   `lntrx-project-rules`, `lntrx-postwrite`, or `lntrx-subagent-audit`. Only
-  `lntrx-header` and `lntrx-footer` remain in `pi.extensions`. Durable agent
-  conventions moved to the global system prompt,
-  and cross-session memory is provided by `context-mode`. The extension sources
-  were removed from the repository.
-- The `.pi/rules/` directory and the `.claude/rules` symlink: the universal
-  commit, PR, workflow, and writing-style rules they carried are fully covered
-  by the global system prompt, and the
-  `lntrx-project-rules` extension that injected them no longer exists.
+  `lntrx-header` and `lntrx-footer` remain in `pi.extensions`. The extension
+  sources were removed from the repository.
+- The `.pi/rules/` directory and the `.claude/rules` symlink, and with them the
+  `lntrx-project-rules` extension that injected them.
 
 ## 0.4.0 - 2026-08-08
 
