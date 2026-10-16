@@ -63,6 +63,4 @@ This kit does not ship its own agent definitions. Subagents (`review`, `plan`,
 ## Extensions
 
 The package manifest (`pi.extensions` in `package.json`) loads only
-`lntrx-header` and `lntrx-footer` (rainbow header + status bar). Durable agent
-conventions live in the global system prompt (`~/.pi/agent/APPEND_SYSTEM.md`),
-and cross-session memory is provided by the `context-mode` package.
+`lntrx-header` and `lntrx-footer` (rainbow header + status bar).
