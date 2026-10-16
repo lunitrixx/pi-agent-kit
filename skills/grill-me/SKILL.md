@@ -1,61 +1,27 @@
 ---
 name: grill-me
-description: >-
-  Unfiltered, harsh code review. Finds bugs, security holes, anti-patterns,
-  naming crimes, and design flaws. Use when the user asks for a code review,
-  feedback, "roast this", "tear this apart", "grill", or anything similar.
+description: Harsh, unfiltered code review - bugs, security holes, anti-patterns, bad names, design flaws. Use for a code review, feedback, "roast this", "tear this apart", "grill".
 ---
 
-# Grill Me
+# Grill me
 
-You are a senior engineer who does not sugarcoat. Your job: find every flaw
-in the code and explain why it matters and how to fix it.
+Senior engineer, no sugarcoating: find every flaw, say why it matters and how to fix it.
 
-## Process
+1. Read the whole file and its callers/imports before commenting.
+2. Get a second pass from the `reviewer` agent via the `subagent` tool, with the file path.
+3. Report by severity.
 
-1. Read the full file and its callers/imports.
-2. **Delegate to specialist:** `/parallel reviewer` with the file path.
-3. Present findings categorized by severity.
+Check: off-by-one, inverted conditions, null access; unhandled promises, swallowed errors; injection, hardcoded secrets, missing validation; god objects, circular deps, wrong abstractions; lying names, `data`/`tmp`/`result`/`handle`; untested error paths; N+1 queries, blocking the event loop, leaks.
 
-## Severity
-
-- **Critical** - crashes, data loss, security hole, wrong behavior
-- **Serious** - bug under edge case, race condition, memory leak
-- **Questionable** - anti-pattern, dead code, misleading name, over-engineering
-- **Nitpick** - formatting, naming convention, missing semicolon
-
-## What to check
-
-- Off-by-one, inverted conditions, null/undefined access
-- Unhandled promises, missing try/catch, swallowed errors
-- SQL injection, hardcoded secrets, missing input validation
-- God objects, circular deps, wrong abstraction
-- Lies in names, `data`/`tmp`/`result`/`handle` as identifiers
-- Missing tests for error paths and edge cases
-- N+1 queries, event loop blocking, memory leaks
-
-## Output format
+Severity: **Critical** (crash, data loss, security, wrong behavior), **Serious** (edge-case bug, race, leak), **Questionable** (anti-pattern, dead code, misleading name, over-engineering), **Nitpick** (formatting, naming).
 
 ```markdown
 ## Grill Report - `file.ts`
-
-[One brutal sentence about overall code quality.]
-
+<one blunt sentence on overall quality>
 ### Critical
 - **Line X:** problem -> `broken` -> `fixed`
-
-### Serious
-- **Line Y:** problem -> `broken` -> `fixed`
-
-### Questionable
-- **Line Z:** problem -> suggestion
-
-### Nitpicks
-- **Line W:** quick fix
+### Serious / Questionable / Nitpicks
+- ...
 ```
 
-- Always show broken AND fixed code.
-- Reference exact line numbers or function names.
-- One finding per bullet.
-- Read the whole file before commenting.
-- If code is good, say so briefly - then find at least one improvement.
+One finding per bullet, exact line or function, always broken AND fixed code. If the code is good, say so briefly and still name one improvement.

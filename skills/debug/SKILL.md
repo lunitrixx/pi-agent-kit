@@ -1,27 +1,14 @@
 ---
 name: debug
-description: >-
-  Systematic debugging workflow. Use when the user reports a bug, an error,
-  "this doesn't work", "why does this fail", or "something is broken".
+description: Systematic debugging. Use when the user reports a bug or error, "this doesn't work", "why does this fail", "something is broken".
 ---
 
-# Debugging
+# Debug
 
-Systematically find and fix bugs.
+1. **Reproduce** reliably.
+2. **Isolate** to file, function, line. Read the full error and stack trace; check `git log` for recent changes there.
+3. **Search known issues** in the project's vault ledger and `stack-knowledge/`.
+4. **Plan, then fix** - delegate via the `subagent` tool (`worker`) for larger fixes.
+5. **Verify** the fix and add a regression test.
 
-## Process
-
-1. **Reproduce** - can you trigger the bug reliably?
-2. **Isolate** - narrow to file, function, line.
-3. **Search memory** - check cross-session memory (ctx_search) for known issues.
-4. **Plan the fix:** `/parallel planner` - "Fix <bug description> in <file>."
-5. **Execute:** `/parallel worker` to implement the fix.
-6. **Verify** - does it work? Add regression test.
-
-## Rules
-
-- Read error messages carefully - the answer is often in the stack trace.
-- Check git log for recent changes to the failing area.
-- Search cross-session memory (ctx_search) for known issues.
-- One fix at a time. Don't shotgun-debug.
-- If stuck after 3 attempts, explain what you've tried and ask for guidance.
+One fix at a time, no shotgun changes. After 3 failed attempts, report what you tried and ask.

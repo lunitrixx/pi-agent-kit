@@ -6,6 +6,11 @@
 
 - Skill files: replaced all non-ASCII glyphs (em dashes, en dashes, ellipses, arrows,
   box-drawing characters, emoji severity markers) with plain ASCII. No behavior change.
+- Skill files rewritten for brevity (54 KB to 23 KB in total, shorter descriptions);
+  every step and rule is kept. References to things that no longer exist were
+  replaced: `/parallel planner|worker|reviewer` now means the `subagent` tool with
+  `worker` or `reviewer`, and `/memory scan`, `ctx_search` and `ctx_index` now point
+  at the vault ledger and `stack-knowledge/`, which the global rules name as the only memory.
 
 ### Removed
 
