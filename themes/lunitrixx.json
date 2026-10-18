@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/theme-schema.json",
+
   "name": "lunitrixx",
   "vars": {
     "bg": "#18181e",
@@ -76,27 +76,14 @@
     "thinkingMedium": "cyan",
     "thinkingHigh": "purple",
     "thinkingXhigh": "lightPurple",
+    "thinkingMax": "accent",
 
-    "bashMode": "cyan",
-    "pythonMode": "accent",
+    "scrollbarTrack": "darkGray",
+    "scrollbarThumb": "dimGray",
+    "searchMatchBg": "yellow",
+    "searchMatchText": "bg",
 
-    "statusLineBg": "#111119",
-    "statusLineSep": "#3a4455",
-    "statusLineModel": "#c792ea",
-    "statusLinePath": "#00a8fc",
-    "statusLineGitClean": "#7fd962",
-    "statusLineGitDirty": "#ebc43a",
-    "statusLineContext": "#38b2c5",
-    "statusLineSpend": "#5cb8ff",
-    "statusLineStaged": "#7fd962",
-    "statusLineDirty": "#ebc43a",
-    "statusLineUntracked": "#f05050",
-    "statusLineOutput": "accent",
-    "statusLineCost": "accent",
-    "statusLineSubagents": "#c792ea"
-  },
-  "symbols": {
-    "preset": "nerd"
+    "bashMode": "cyan"
   },
   "export": {
     "pageBg": "bg",

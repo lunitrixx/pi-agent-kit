@@ -2,6 +2,10 @@
 
 ## 2026-10-18
 
+### Fixed
+
+- lunitrixx theme: removed oh-my-pi-only tokens (statusLine*, pythonMode, symbols) that pi 1.3 rejects, and added the new required tokens (scrollbarTrack, scrollbarThumb, searchMatchBg, searchMatchText, thinkingMax).
+
 ### Changed
 
 - Made compatible with the new pi version.
