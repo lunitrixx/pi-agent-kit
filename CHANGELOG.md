@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-18
+
+### Changed
+
+- Made compatible with the new pi version.
+
 ## 2026-10-16
 
 ### Changed
