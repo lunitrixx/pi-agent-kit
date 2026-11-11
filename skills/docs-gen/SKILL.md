@@ -5,7 +5,7 @@ description: Generate a documentation site under docs/ (guides, API reference, e
 
 # Docs site
 
-```
+```text
 docs/
   index.md            overview + quick start, links to all sections
   guide/              getting-started.md, usage.md, configuration.md, one page per major workflow

@@ -12,6 +12,7 @@ description: Write unit and integration tests for existing code. Use for "add te
 5. Run the tests and fix failures. Never commit broken tests.
 
 Rules:
+
 - Arrange / Act / Assert visible in every test; one behavior per test; names that say the behavior (`throws when email is invalid`).
 - Test behavior, not implementation.
 - Mock at the boundary (DB, HTTP, filesystem), never your own classes; use the project's mock library; few mocks per test; verify only essential calls. Prefer real dependencies (test DB, containers) for integration tests.

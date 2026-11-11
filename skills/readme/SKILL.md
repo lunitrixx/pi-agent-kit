@@ -9,19 +9,19 @@ description: Generate or update README.md from the actual codebase. Use for "wri
 2. Read the existing README. Keep every hand-written section; only add what is missing.
 3. Fill this structure:
 
-```markdown
-# <Name>
-<one-line description>
-<badges: license, version, and the stack's own (shields.io npm/pypi/crates/go-mod, CI workflow badge)>
+   ```markdown
+   # <Name>
+   <one-line description>
+   <badges: license, version, and the stack's own (shields.io npm/pypi/crates/go-mod, CI workflow badge)>
 
-## Quick Start      clone, install, run
-## Usage            real, copy-pasteable examples
-## Architecture     ASCII or Mermaid: components and data flow
-## API Reference    link to docs/source or the key exports
-## Development      install dev deps, test, build
-## Contributing     short; link CONTRIBUTING.md if it exists
-## License          <name> - see [LICENSE](LICENSE)
-```
+   ## Quick Start      clone, install, run
+   ## Usage            real, copy-pasteable examples
+   ## Architecture     ASCII or Mermaid: components and data flow
+   ## API Reference    link to docs/source or the key exports
+   ## Development      install dev deps, test, build
+   ## Contributing     short; link CONTRIBUTING.md if it exists
+   ## License          <name> - see [LICENSE](LICENSE)
+   ```
 
 4. Run every command in the README; if one fails, fix the README.
 

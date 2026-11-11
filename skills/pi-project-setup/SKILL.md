@@ -6,6 +6,7 @@ description: Bootstrap a new project or migrate an existing one to the Pi-native
 # Pi project setup
 
 ## Hard rules
+
 1. Never lose project-specific information (conventions, commands, host tables, stack details) - it goes into the new `AGENTS.md`.
 2. Never touch source code - only agent config and scaffolding.
 3. Never overwrite a file with meaningful content without asking.
@@ -16,6 +17,7 @@ description: Bootstrap a new project or migrate an existing one to the Pi-native
 Skills dir: regular project `.pi/skills/` (symlink `.claude/skills -> ../.pi/skills`); Pi package (`"pi.skills"` in `package.json`) `skills/` (symlink `.claude/skills -> ../skills`).
 
 ## 1. Analyze (in parallel)
+
 - Project type from manifests (`flake.nix`, `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, ...); Pi package?
 - New (empty/no meaningful files) or existing (source, README or git)?
 - Read every existing agent instruction file fully: `CLAUDE.md`, `AGENTS.md`, `CURSOR.md`, `.cursorrules`, `.github/copilot-instructions.md`.
@@ -24,6 +26,7 @@ Skills dir: regular project `.pi/skills/` (symlink `.claude/skills -> ../.pi/ski
 - Project name: ask for new projects if unclear; existing: from directory, README or `package.json`.
 
 ## 2. Plan
+
 Show Create / Replace / Move / Delete / Update / Preserve lists and wait for confirmation.
 
 ## 3. Execute
@@ -86,7 +89,8 @@ provided by the global system prompt - never write them into this file.
 @AGENTS.md
 ```
 
-**Skills**
+**Skills:**
+
 - Real skills in `.claude/skills/`: move each `<name>/` with supporting files into the canonical dir, remove the old dir, `ln -s ../.pi/skills .claude/skills` (Pi package: `../skills`), `git add .claude/skills`.
 - Canonical skills already exist: only create the symlink.
 - None anywhere: create the empty canonical dir and the symlink.
@@ -94,8 +98,10 @@ provided by the global system prompt - never write them into this file.
 **.pi/settings.json** - keep existing keys; ensure `{"skills": ["~/.claude/skills", "~/.codex/skills"]}` (`.pi/skills/` is auto-discovered).
 
 **Scaffolding** (create if missing; never remove existing entries):
+
 - `.gitignore` - existing projects append only:
-  ```
+
+  ```text
   # Agent personal / machine-specific config (never commit)
   .claude/settings.local.json
   .pi/settings.local.json
@@ -105,20 +111,23 @@ provided by the global system prompt - never write them into this file.
   .env.*
   !.env.example
   ```
+
   plus `skills-lock.json` if present. New projects additionally get OS junk (`.DS_Store`, `Thumbs.db`, `Desktop.ini`), editor junk (`*.swp`, `*.swo`, `*~`), build output (`dist/`, `build/`) and stack-specific entries (`node_modules/`, `__pycache__`, `/target/`).
 - `.gitattributes` - `* text=auto`; `text` for md/json/yaml/yml/toml/xml; `text eol=lf` for sh, bash and the stack's sources (ts, tsx, js, py, rs, go, css, html); `binary` for png, jpg, jpeg, gif, ico, woff, woff2, pdf.
 - `.editorconfig` (new projects; ask for existing) - `root = true`; `[*]` utf-8, lf, space, indent 2, final newline, trim trailing whitespace; `[*.md]` no trimming; `[Makefile]` tabs.
 - `.env.example` - comment header: copy to `.env` and fill in; `.env` is gitignored, this file documents required vars.
 - `LICENSE.md` - MIT, current year, holder from git config/README or ask.
 - `.vscode/settings.json` (only if `.vscode/` exists) - `{"files.eol": "\n", "editor.formatOnSave": true}`.
-- New projects only: ask Makefile or justfile; create targets `help` (self-documenting from `## ` comments), `install`, `dev`, `test`, `build`, `lint`, `clean`, each a TODO echo.
+- New projects only: ask Makefile or justfile; create targets `help` (self-documenting from comments that start with `##` and a space), `install`, `dev`, `test`, `build`, `lint`, `clean`, each a TODO echo.
 
 **Remove**: `skills-lock.json`; old `.claude/skills/` contents; `.cursorrules`/`copilot-instructions.md` fully covered by AGENTS.md - only after confirmation.
 
 ## 4. Verify
+
 Read back `AGENTS.md` (nothing project-specific lost, no universal rules), check both skills paths and the symlink, the scaffolding files, `git status`.
 
 ## Edge cases
+
 - No agent config at all: template with a TODO in `## Project`; ask the user to fill it.
 - Populated `AGENTS.md` exists: ask before overwriting.
 - Missing `.pi/` or `.claude/`: create them.
