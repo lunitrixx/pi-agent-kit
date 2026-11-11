@@ -29,6 +29,7 @@ its environment. Nothing is written to the shell, a file in the repository or th
 | Name | Used by | Notes |
 | :--- | :--- | :--- |
 | `FORGEJO_TOKEN` | Forgejo MCP server (`git.headfirst.cloud`) | Personal API token. Create it at `https://git.headfirst.cloud/user/settings/applications` with the scopes your work needs. |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY` | pi, when the kit is tried against a hosted model | Optional and personal. The kit reads none of them; start pi as `secretspec run -- pi`. They replace the former `.envrc.local` template. |
 
 `FORGEJO_TOKEN` has a fixed reference (`ref = { item = "FORGEJO_TOKEN" }`). For the keyring, `item` is
 the keyring service name. Without a reference, SecretSpec stores a value per project under
