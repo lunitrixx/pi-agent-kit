@@ -10,3 +10,4 @@ supersedes it and link the two.
 ## Records
 
 - [0001: Dev shell from nix-base with nix develop](0001-nix-base-dev-shell.md)
+- [0002: The kit stays an extension package, not an orchestration layer](0002-kit-stays-an-extension-package.md)
