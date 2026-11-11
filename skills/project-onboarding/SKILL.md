@@ -11,7 +11,7 @@ Read-only: never modify project files. Skip steps that do not apply. Report a sh
 
 - README: name, purpose, key technologies.
 - Agent instructions, fully: `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`.
-- Prior knowledge: the project's vault ledger (`projects/<orga>/<projekt>/memory.md`) and `stack-knowledge/`.
+- Prior knowledge: the project's `docs/` (architecture, design records, exec plans, tech-debt tracker).
 
 ## 2. Structure and tooling
 
@@ -62,7 +62,7 @@ git log --oneline --follow <high-churn-file>   # hotfixes, reverts, repeated tou
 
 ## 7. Persist
 
-Write stack and versions, architecture and boundary diagram, conventions, fragile modules and gotchas, entry points with traces, and notable dependencies into the project's vault ledger as the global rules describe. Always persist - the summary alone is lost.
+Write stack and versions, architecture and boundary diagram, conventions, fragile modules and gotchas, entry points with traces, and notable dependencies into the project's `AGENTS.md` and `docs/` as the repository's rules describe. Always persist - the summary alone is lost.
 
 ## When to stop
 
@@ -82,5 +82,5 @@ Purpose / Stack (<language> + <framework> on <runtime>)
 ### Conventions        naming, testing + command, formatting
 ### Things to know     gotchas, circular deps, tech debt
 ### Install & run
-### Persisted          what was written to the vault
+### Persisted          what was written to AGENTS.md and docs/
 ```
