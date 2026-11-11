@@ -1,9 +1,27 @@
-# Project-local agent state - never publish
+# Repository tooling that is not part of the pi package.
 .pi
+.pi-sessions/
+.pi-subagents/
+.claude/
+.agents/
+.forgejo/
+.workmux.yaml
+.workmux/
+.mcp.json
+.pre-commit-config.yaml
+.editorconfig
+.direnv/
+docs/
+changelog.d/
+flake.nix
+flake.lock
+secretspec.toml
+AGENTS.md
+*.local.md
+timesheet.md
 
-# Already in .gitignore but belt-and-suspenders
+# Build output and logs
 node_modules/
 dist/
 build/
 *.log
-.pi-subagents/
