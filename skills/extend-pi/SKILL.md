@@ -6,7 +6,7 @@ description: Pick and build the right Pi extension type (skill, extension, agent
 # Extend Pi
 
 | Need | Build | Example |
-|---|---|---|
+| :--- | :--- | :--- |
 | Instructions only | Skill | how to write commits |
 | State, tools, events, TUI, blocking | Extension | block `rm -rf`, show LSP errors |
 | Isolated worker with model/tool limits | Agent | review code, plan a feature |

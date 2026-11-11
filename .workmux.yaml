@@ -1,184 +1,51 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/raine/workmux/main/schema.json
 #
-# One task, one worktree, one window.
-#
-# `workmux add feat/whatever -l qwen` branches off main, lays out a single agent
-# and starts it with the task already in it. Agents do not share a checkout, which
-# matters here for a specific reason: this repository is a Pi *package*, and its
-# extensions are loaded from paths listed in package.json. Two agents editing
-# `extensions/` in one tree would each load half of the other's work and blame the
-# harness for it.
-#
-# `workmux config reference` prints every option with its documentation.
+# One task, one worktree, one tmux session. `workmux add <branch>` creates the worktree beside the
+# repository (`<repo>__worktrees/<branch>`), runs post_create and starts the agent.
 
-# The default branch, read rather than guessed: `origin/HEAD` resolves to
-# refs/remotes/origin/main, and the global agent conventions forbid committing
-# to it directly at all - every change goes through a branch and a pull request.
-#
-# Named rather than `auto`. `auto` is a resolution chain (main_branch, origin/HEAD,
-# main, master) that lands on the same branch while costing a reader a lookup.
-# Named also means a worktree created while sitting on a feature branch still
-# branches from main instead of inheriting unfinished work - which is how this file
-# would have been written into somebody else's task.
+# Named rather than `auto`, so a worktree created from a feature branch still branches from main.
 base_branch: main
 
-# workmux brings its own tmux session per worktree.
-#
-# The default `window` places the agent in the session you are already in, and
-# fails with "cannot determine the tmux session for window placement" when there is
-# none - which is exactly the situation a dispatch script runs in. `session`
-# removes that prerequisite; `workmux dashboard` is how you look at them.
+# The default `window` mode needs a running tmux session; a dispatch script has none.
 mode: session
 
-# The one coding tier. `coder-qwen` is a named profile in
-# ~/.config/workmux/config.yaml - `agents` is global-only, so the profile must
-# exist on the machine that loads this committed file.
+# Agent profiles live in ~/.config/workmux/config.yaml: model and credentials belong to the machine.
 agent: coder-qwen
 
-#-------------------------------------------------------------------------------
-# Panes
-#-------------------------------------------------------------------------------
-
-# ONE PANE PER WINDOW, everywhere in this file.
-#
-# An agent needs about 68 columns; below that it dies on "Rendered line 2 exceeds
-# terminal width", and at 80 columns any split leaves both halves under that.
-# There is also nothing to put in a second pane here - this repository has no dev
-# server, no watcher and no test runner that stays resident; the merge checks are
-# short one-shot scripts that exit.
+# One pane: an agent needs about 68 columns and a split leaves both halves below that.
 panes:
   - command: <agent>
     name: agent
     focus: true
 
-#-------------------------------------------------------------------------------
-# Named layouts
-#-------------------------------------------------------------------------------
-
-# The single model tier. The name is the contract with the orchestrator's
-# projects.yaml, which dispatches with `-l qwen`.
-#
-#   workmux add feat/x -l qwen
-#
-# The profile (coder-qwen) lives in the global config, because which model you
-# drive and with whose credentials is a property of the machine, not of this
-# repository.
-layouts:
-  qwen:
-    panes:
-      - command: <agent:coder-qwen>
-        name: agent
-        focus: true
-
-#-------------------------------------------------------------------------------
-# Files
-#-------------------------------------------------------------------------------
-
 files:
-  # Personal, gitignored or untracked, and per checkout.
-  #
-  # None of the three exists in this checkout today. That is deliberate rather than
-  # sloppy: every entry is run through the glob crate, so a pattern with no match is
-  # silently skipped, and listing them now means they are picked up the day they
-  # appear.
-  #
-  #   .envrc.local              the API keys. `.envrc.local-template` is committed
-  #                             and documents exactly this file. See post_create for
-  #                             why nothing loads it automatically yet.
-  #   .pi/pi-agent-kit.json     this kit's own per-project config. Copied, not
-  #                             shared: an agent that disables a widget in its
-  #                             worktree must not disable it in the main
-  #                             checkout.
-  #   .claude/settings.local.json   the same thing for the Claude Code adapter.
+  # Gitignored per-checkout state, copied (not linked). A pattern with no match is skipped.
   copy:
-    - .envrc.local
-    - .pi/pi-agent-kit.json
+    - .env
     - .claude/settings.local.json
-
-  # Nothing. This is a finding, not an omission.
-  #
-  # `node_modules` is the obvious candidate and is the one that must not be here.
-  # The root package.json declares `workspaces: ["extensions/*"]`, so npm links
-  # every extension into node_modules by name - a shared node_modules would make
-  # `lntrx-header` in one worktree resolve to the *main checkout's* source, and an
-  # agent would then test code it is not editing. It is also written by
-  # post_create's install, so two worktrees created at once would rewrite each
-  # other's tree mid-install. Installing for real costs about three seconds against
-  # a warm ~/.npm; sharing it costs correctness.
-  #
-  # There is no build output to share either: extensions ship as TypeScript and Pi
-  # loads `src/extension.ts` directly, so there is no dist/ and no bundler cache.
-  # `.pi-subagents/` is per-run scratch. The one piece of genuinely shared state,
-  # the memory database, already lives outside the repository at ~/.pi/memory.db
-  # and is therefore shared by every worktree without anything being linked.
-  #
-  # THE RULE, bought with 345 MB of deleted media in another project on 2026-08-09:
-  # only gitignored leaf directories belong in this list. Symlinking a directory
-  # that contains tracked files hides them from git, every worktree then reports
-  # them as deleted, and an agent staging broadly removes them from the repository.
-  # Check with `git ls-files <path>` before adding one - an empty result is the
-  # permission.
+    - .pi/settings.local.json
+  # Only gitignored leaf directories may be linked (`git ls-files <path>` empty).
+  # Never node_modules: the npm workspaces link each extension into it by name, so a shared one would
+  # resolve to another checkout's source, and parallel installs would rewrite each other's tree.
   symlink: []
 
-#-------------------------------------------------------------------------------
-# Hooks
-#-------------------------------------------------------------------------------
-
-# Short - a few seconds - because there is nothing to build.
-#
-# NOT `direnv allow`, and that is checked rather than forgotten: this repository
-# has no `.envrc` at all, only `.envrc.local-template`, so direnv has nothing to
-# load and the keys are exported by hand or by the parent shell. If an `.envrc`
-# ever appears, `direnv allow` belongs here on the same day - approval is per
-# directory, and a worktree that has never been approved silently gets an empty
-# environment rather than an error.
+# Enters the dev shell once before the agent starts: it generates `.mcp.json`, `.pi/settings.json`,
+# `.claude/`, the skill links and the git hooks. Non-interactive, because an interactive shell would hang.
 post_create:
-  # From the lockfile, not `npm install`: a worktree must reproduce what the branch
-  # actually pins, and `npm ci` fails loudly when package.json and the lockfile have
-  # drifted apart instead of quietly fixing it. Measured at about three seconds.
-  - npm ci
+  - nix develop -c true
+  # From the lock file: `npm ci` fails when package.json and package-lock.json have drifted apart.
+  - nix develop -c npm ci
 
-# The checks, cheapest first. Any failure aborts the merge.
-#
-# THE ODDITY FIRST, because it explains the shape of this list: this repository has
-# no CI pipeline. There is no `.github/` directory at all, and package.json has no
-# `scripts` block - no test, no lint, no build. So there is nothing to mirror, and
-# the authority is what AGENTS.md and README.md document plus what the test files
-# say about themselves. The commands below are exactly that, and each one was run
-# in a fresh clone before being written down.
-#
-# Deliberately NOT here: `npm audit`. It currently reports two high advisories in
-# undici, reached through @earendil-works/pi-coding-agent - a peer dependency this
-# repository does not control and cannot upgrade on its own. As a merge gate it
-# would block every branch on somebody else's release schedule.
-#
-# Also not here: `pi install .`. It is the documented development step, but it
-# writes into the user's global Pi configuration, and a merge check must not change
-# state outside the worktree.
+# There is no CI, so these are the merge gates. `nix flake check -L` runs the git hooks, the formatter
+# and the checks `pi-manifest` and `skills`. Not here: `npm audit` (its advisories are in the pi peer
+# dependencies) and `pi install .` (it writes the user's global pi configuration).
 pre_merge:
-  # The manifest check, and the one failure this repository ships silently.
-  #
-  # package.json is a list of paths - two extensions, the skills directory, the
-  # themes directory - and nothing at load time tells you that one of them is a
-  # typo except the extension quietly not being there. Renaming a directory without
-  # editing package.json is a one-line mistake that no test catches. Half a second.
-  - >-
-    node -e "const fs=require('node:fs');const j=JSON.parse(fs.readFileSync('package.json','utf8'));const paths=[...j.pi.extensions,...j.pi.skills,...j.pi.themes];const missing=paths.filter(p=>!fs.existsSync(p));if(missing.length){console.error('pi manifest points at missing paths: '+missing.join(', '));process.exit(1)}console.log('pi manifest ok: '+paths.length+' paths')"
+  - nix flake check -L
+  # Again from the lock file, because the branch may have changed it since post_create.
+  - nix develop -c npm ci
 
-  # Re-run from the lockfile, because the branch may have changed it since
-  # post_create.
-  - npm ci
-
-# pre_remove is deliberately ABSENT rather than empty, and the difference matters.
-#
-# `pre_remove: []` does not mean "nothing to do" - it *disables* workmux's default,
-# which auto-detects Node projects and fast-deletes node_modules. That default is
-# exactly what this repository wants: node_modules here is around a hundred
-# thousand files, and removing it the ordinary way is the slowest part of tearing a
-# worktree down. Omitting the key keeps it.
-#
-# There is nothing to add to it either. A Nix project leaves GC roots behind and a
-# Laravel one leaves a test schema; everything this repository produces -
-# node_modules, .pi-subagents/ - lives inside the worktree and goes with it. The
-# memory database at ~/.pi/memory.db is shared and deliberately untouched: an agent
-# finishing a task must not wipe what every other session recalls.
+# Stray `result` links are GC roots that would outlive the worktree. Any pre_remove entry replaces
+# workmux's default fast removal of node_modules, so `<cleanup-node-modules>` keeps it.
+pre_remove:
+  - rm -f result result-*
+  - <cleanup-node-modules>

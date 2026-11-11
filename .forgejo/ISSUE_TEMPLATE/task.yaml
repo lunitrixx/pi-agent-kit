@@ -1,0 +1,30 @@
+name: Task
+about: A change, feature or piece of work
+title: '[Task]: '
+body:
+  - type: textarea
+    id: change
+    attributes:
+      label: What should change?
+      description: Describe the result you want, not the steps to get there.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why?
+      description: What problem does it solve, and what happens if we do nothing?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: How do we know it is done?
+      description: Checkable acceptance criteria.
+      placeholder: |
+        - [ ] ...
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional details
+      description: Constraints, links, related issues.
