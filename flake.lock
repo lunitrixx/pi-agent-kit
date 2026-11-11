@@ -230,11 +230,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1794303102,
-        "narHash": "sha256-4K7qFjHXuBYwrZG0B8vM49Uuuo2ncJP0Xc2nPrttySs=",
+        "lastModified": 1794341360,
+        "narHash": "sha256-cGHVwZI9fxJ1Z5SkVwPi5Anka8HUHVzLoJzeNSA9ciE=",
         "ref": "refs/heads/main",
-        "rev": "432b72f14a5f5cbba5a004598978c1c56c570e7a",
-        "revCount": 3,
+        "rev": "2b3169072fb153c69f0c683b02fa540ab34b8597",
+        "revCount": 5,
         "type": "git",
         "url": "ssh://forgejo@git.headfirst.cloud/headfirst-msp/nix-base"
       },
